@@ -19,6 +19,7 @@ from rich.table import Table
 from rich.tree import Tree
 
 from core.models import AnalysisResult, Risk, Severity
+from core.attack_knowledge import get_attack_description, get_compliance_references
 
 console = Console()
 
@@ -56,6 +57,14 @@ class ReportGenerator:
                 "cwe_url": _cwe_url(r.cwe_id) if r.cwe_id else None,
                 "cve_urls": [_cve_url(c) for c in cve_ids] if cve_ids else None,
             }
+            # Add ATT&CK context
+            if r.cwe_id:
+                attack_desc = get_attack_description(r.cwe_id)
+                compliance = get_compliance_references(r.cwe_id)
+                if attack_desc:
+                    refs["mitre_attack"] = attack_desc
+                if compliance:
+                    refs["compliance"] = compliance
             risks_out.append({
                 "id": r.id,
                 "title": r.title,
@@ -169,6 +178,19 @@ class ReportGenerator:
                 f"**Fix:** {risk.suggestion}",
                 "",
             ])
+
+            # Add ATT&CK context
+            if risk.cwe_id:
+                attack_desc = get_attack_description(risk.cwe_id)
+                compliance = get_compliance_references(risk.cwe_id)
+                if attack_desc:
+                    lines.append(f"**MITRE ATT&CK:** {attack_desc}")
+                    lines.append("")
+                if compliance:
+                    lines.append("**Compliance References:**")
+                    for framework, ref in compliance.items():
+                        lines.append(f"- {framework}: {ref}")
+                    lines.append("")
 
             if risk.evidence:
                 lines.append("**Evidence:**")
