@@ -195,8 +195,8 @@ cd llama.cpp
 ROCM_PATH=/opt/rocm cmake -B build -DGGML_HIP=ON -DLLAMA_BUILD_SERVER=ON
 cmake --build build --config Release -j$(nproc)
 
-# Download Qwen2.5-Coder-7B-Instruct GGUF
-huggingface-cli download Qwen/Qwen2.5-Coder-7B-Instruct-GGUF \
+# Download Qwen2.5-Coder-32B-Instruct GGUF
+huggingface-cli download Qwen/Qwen2.5-Coder-32B-Instruct-GGUF \
   qwen2.5-coder-7b-instruct-q4_k_m.gguf --local-dir models/
 
 # Run inference
@@ -262,7 +262,7 @@ pytest --cov=. --cov-report=html
 | Component | Technology |
 |-----------|-----------|
 | Language | Python 3.12 |
-| LLM | Qwen2.5-Coder-7B-Instruct (GGUF Q4_K_M) |
+| LLM | Qwen2.5-Coder-32B-Instruct (GGUF Q4_K_M) |
 | LLM Runtime | llama.cpp with HIP backend |
 | Static Analysis | Regex + Semgrep |
 | CVE Database | NVD API (National Vulnerability Database) |

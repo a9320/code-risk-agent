@@ -21,6 +21,27 @@ from core.models import LLMBackend, LLMConfig
 
 console = Console()
 
+def find_gguf_model() -> str:
+    """Auto-discover GGUF model file."""
+    import os
+    from pathlib import Path
+    # 1. Environment variable
+    if path := os.getenv("CODERISK_MODEL_PATH"):
+        return path
+    # 2. Common paths
+    search_paths = [
+        Path.home() / ".coderisk" / "models",
+        Path("/workspace/models"),
+        Path("/mnt/agents/output"),
+    ]
+    for dir_path in search_paths:
+        if dir_path.exists():
+            ggufs = sorted(dir_path.glob("*.gguf"), key=lambda p: p.stat().st_size, reverse=True)
+            if ggufs:
+                return str(ggufs[0])
+    return ""
+
+
 DEFAULT_CONFIGS = {
     LLMBackend.SHARED_API: LLMConfig(
         backend=LLMBackend.SHARED_API,
@@ -38,7 +59,7 @@ DEFAULT_CONFIGS = {
     ),
     LLMBackend.LOCAL_LLAMA_CPP: LLMConfig(
         backend=LLMBackend.LOCAL_LLAMA_CPP,
-        model_path="/workspace/models/qwen2.5-coder-32b-instruct-q4_k_m.gguf",
+        model_path=find_gguf_model() or "/workspace/models/qwen2.5-coder-32b-instruct-q4_k_m.gguf",
         model="qwen2.5-coder-32b-instruct",
         temperature=0.1,
         max_tokens=8192,
@@ -217,9 +238,20 @@ class LLMClient:
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
     ) -> dict:
-        """Send chat request, parse JSON from response."""
-        raw = self.chat(messages, temperature, max_tokens)
-        return _extract_json(raw)
+        """Send chat request, parse JSON with auto-retry on parse failure."""
+        last_err = None
+        msgs = list(messages)
+        for attempt in range(3):
+            raw = self.chat(msgs, temperature, max_tokens)
+            try:
+                return _extract_json(raw)
+            except (ValueError, KeyError) as e:
+                last_err = e
+                if attempt < 2:
+                    msgs = list(messages) + [{"role": "user", "content":
+                        f"Your response was not valid JSON. Error: {e}. Respond with valid JSON only."}]
+                    console.print(f"[yellow]JSON parse failed, retry {attempt+1}/3[/]")
+        raise ValueError(f"Failed to get valid JSON after 3 attempts: {last_err}")
 
     @property
     def stats(self) -> dict:

@@ -40,6 +40,15 @@ MAX_STATIC_WORKERS = 4   # CPU-bound parallelism
 MAX_SEMANTIC_WORKERS = 2  # GPU-bound, limited concurrency
 
 
+VALID_TRANSITIONS = {
+    State.INIT: {State.PARSE, State.ERROR},
+    State.PARSE: {State.ANALYZE, State.ERROR},
+    State.ANALYZE: {State.VERIFY, State.ERROR},
+    State.VERIFY: {State.REPORT, State.ERROR},
+    State.REPORT: {State.DONE, State.ERROR},
+}
+
+
 class State(str, Enum):
     INIT = "init"
     PARSE = "parse"
@@ -345,6 +354,13 @@ class Orchestrator:
             current = parent
 
         return Path(files[0].path).parent
+
+    def _transition(self, new_state: State) -> None:
+        """Validate and execute state transition."""
+        valid = VALID_TRANSITIONS.get(self.state, set())
+        if new_state not in valid:
+            raise ValueError(f"Invalid state transition: {self.state} -> {new_state}")
+        self.state = new_state
 
     @property
     def current_state(self) -> str:

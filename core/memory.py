@@ -10,6 +10,7 @@ false positives get suppressed.
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import re
 import json
@@ -211,10 +212,14 @@ class MemoryLayer:
         error_data = {k: v.to_dict() for k, v in self._error_memory.items()}
 
         with open(CORRECT_MEMORY_FILE, "w") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
             json.dump(correct_data, f, indent=2)
+            fcntl.flock(f, fcntl.LOCK_UN)
 
         with open(ERROR_MEMORY_FILE, "w") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
             json.dump(error_data, f, indent=2)
+            fcntl.flock(f, fcntl.LOCK_UN)
 
     def _load(self):
         """Load memory from disk."""

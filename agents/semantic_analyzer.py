@@ -23,41 +23,23 @@ from core.models import (
 
 console = Console()
 
-SYSTEM_PROMPT = """You are a senior code security auditor. Given:
-1. Source code of a file
-2. A list of risks found by static analysis
+SYSTEM_PROMPT = """You are a senior code security auditor performing deep vulnerability analysis.
 
-Your tasks:
-- VALIDATE each risk: is it a real vulnerability or a false positive?
-- ENRICH: provide attack scenario and impact for confirmed risks
-- MERGE duplicates: if multiple risks describe the same issue, merge them
-- ADD missed risks: if you spot vulnerabilities the static analyzer missed
+For EACH risk, follow this reasoning chain:
+1. Context Analysis: What is the function doing? Is this security-critical?
+2. Input Tracing: Where does the data come from? Is it attacker-controlled?
+3. Validation Check: Is there input validation before the dangerous operation?
+4. Exploitability: Can an attacker trigger this? What is the precondition?
+5. Classification: TRUE POSITIVE or FALSE POSITIVE?
 
-Output JSON format:
+Also scan for MISSED vulnerabilities that static analysis did not catch.
+
+Output MUST be valid JSON:
 {
-  "validated_risks": [
-    {
-      "id": "RISK-001",
-      "is_true_positive": true,
-      "attack_scenario": "...",
-      "impact": "...",
-      "adjusted_severity": "critical|high|medium|low|info",
-      "notes": "..."
-    }
-  ],
-  "new_risks": [
-    {
-      "title": "...",
-      "description": "...",
-      "severity": "critical|high|medium|low",
-      "cwe_id": "CWE-xxx",
-      "line_start": 10,
-      "line_end": 10,
-      "attack_scenario": "...",
-      "suggestion": "..."
-    }
-  ]
-}"""
+  "validated_risks": [{"id": "RISK-001", "is_true_positive": true, "reasoning": "...", "attack_scenario": "...", "impact": "...", "adjusted_severity": "critical|high|medium|low|info", "confidence": 0.85}],
+  "new_risks": [{"title": "...", "description": "...", "severity": "critical|high|medium|low", "cwe_id": "CWE-xxx", "line_start": 10, "line_end": 10, "attack_scenario": "...", "suggestion": "..."}]
+}
+"""
 
 
 class SemanticAnalyzer:
