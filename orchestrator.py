@@ -30,6 +30,7 @@ from core.models import (
     AnalysisResult,
     CodeFile,
     Language,
+    Risk,
 )
 
 console = Console()
@@ -227,21 +228,39 @@ class Orchestrator:
         all_risks.extend(taint_risks_all)
         perf_timings['semgrep_taint'] = (time.monotonic() - t0) * 1000
 
-        # Phase 3: LLM semantic analysis
+        # Phase 3: LLM semantic analysis (PARALLEL — GPU-bound, limited concurrency)
         if request.enable_ai and self.semantic_analyzer:
             t0 = time.monotonic()
-            console.print("\n[bold]  Phase 3: LLM semantic analysis (Agent 2)[/]")
+            console.print("\n[bold]  Phase 3: LLM semantic analysis (Agent 2, parallel)[/]")
+
+            # Collect files that need LLM analysis
+            llm_tasks: list[tuple[CodeFile, list[Risk]]] = []
             for f in valid_files:
                 file_risks = [r for r in all_risks if r.file_path == f.path]
                 if f.line_count < MIN_LINES_FOR_LLM and not file_risks:
                     console.print(f"  [dim]  {f.path}: skipped (small file)[/]")
                     continue
+                llm_tasks.append((f, file_risks))
+
+            # Run LLM analysis in parallel
+            def _run_llm(task: tuple[CodeFile, list[Risk]]):
+                f, file_risks = task
                 try:
-                    enriched = self.semantic_analyzer.analyze(f, file_risks)
-                    all_risks = [r for r in all_risks if r.file_path != f.path]
-                    all_risks.extend(enriched)
+                    return f, self.semantic_analyzer.analyze(f, file_risks), None
                 except Exception as e:
-                    console.print(f"  [yellow]  LLM failed for {f.path}: {e}[/]")
+                    return f, None, e
+
+            with ThreadPoolExecutor(max_workers=MAX_SEMANTIC_WORKERS) as pool:
+                futures = [pool.submit(_run_llm, task) for task in llm_tasks]
+                for future in as_completed(futures):
+                    f, enriched, err = future.result()
+                    if err:
+                        console.print(f"  [yellow]  LLM failed for {f.path}: {err}[/]")
+                    elif enriched:
+                        all_risks = [r for r in all_risks if r.file_path != f.path]
+                        all_risks.extend(enriched)
+                        console.print(f"  [green]  {f.path}: {len(enriched)} risks[/]")
+
             perf_timings['agent2_llm'] = (time.monotonic() - t0) * 1000
 
         # State: VERIFY

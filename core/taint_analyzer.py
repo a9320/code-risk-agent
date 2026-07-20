@@ -1,7 +1,8 @@
 """Simple Taint Analysis Module
 
-Inspired by OpenTaint - tracks data flow from untrusted sources to dangerous sinks.
-Not a full taint engine, but adds cross-function data flow awareness.
+Tracks data flow from untrusted sources to dangerous sinks.
+Single-function variable tracking only — cross-function data flow
+requires Call Graph analysis (planned for future release).
 
 Sources (untrusted input):
 - C: argv, getenv(), scanf(), fgets(), read()

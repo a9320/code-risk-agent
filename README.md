@@ -66,7 +66,7 @@ Static Analyzer  Semantic Analyzer
 
 | Agent | Role | Compute | What It Does |
 |-------|------|---------|--------------|
-| **Agent 1: Static Analyzer** | Pattern matching | CPU | 11 CWE rules (buffer overflow, format string, double free, command injection, etc.) |
+| **Agent 1: Static Analyzer** | Pattern matching | CPU | 27 detection rules (buffer overflow, format string, double free, command injection, etc.) |
 | **Agent 2: Semantic Analyzer** | LLM-driven analysis | GPU | Validates findings, discovers missed vulnerabilities, generates attack scenarios |
 | **Agent 3: Deep Verifier** | Triple cross-validation | GPU + CPU | CWE knowledge base + live CVE/NVD lookup + self-reflection loop |
 | **Agent 4: Report Generator** | Output formatting | CPU | JSON, Markdown, Rich terminal with CWE/CVE clickable links |
@@ -214,7 +214,7 @@ code-risk-agent/
 ├── main.py                    # CLI entry point
 ├── orchestrator.py            # State machine pipeline
 ├── agents/
-│   ├── static_analyzer.py     # Agent 1: Pattern matching (11 CWE rules)
+│   ├── static_analyzer.py     # Agent 1: Pattern matching (27 rules, C + Python)
 │   ├── semantic_analyzer.py   # Agent 2: LLM-driven analysis
 │   ├── deep_verifier.py       # Agent 3: Triple cross-validation
 │   └── report_generator.py    # Agent 4: Output formatting
@@ -264,7 +264,7 @@ pytest --cov=. --cov-report=html
 | Language | Python 3.12 |
 | LLM | Qwen2.5-Coder-7B-Instruct (GGUF Q4_K_M) |
 | LLM Runtime | llama.cpp with HIP backend |
-| Static Analysis | Regex + Tree-sitter + Semgrep |
+| Static Analysis | Regex + Semgrep |
 | CVE Database | NVD API (National Vulnerability Database) |
 | Dependency Scan | OSV API + local fallback |
 | Memory | JSON-based dual memory system |
@@ -293,8 +293,9 @@ MIT
 
 - **Radeon Cloud container:** HIP backend requires `GGML_HIP=ON` (not the older `GGML_HIPBLAS=ON`). On bare-metal systems, both flags may work.
 - **Language support:** Currently C and Python only. Java, Go, Rust planned for future releases.
-- **Semgrep integration:** Requires Semgrep CLI installed separately. The system works without it but loses one analysis layer.
+- **Taint analysis:** Single-function variable tracking only. Cross-function data flow requires Call Graph (planned).
 - **Memory learning:** Requires 2+ scans to activate false positive suppression. Single-run results may include known false positives.
+- **Semgrep integration:** Requires Semgrep CLI installed separately. The system works without it but loses one analysis layer.
 
 ## Acknowledgments
 

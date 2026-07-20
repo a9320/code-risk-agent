@@ -109,7 +109,7 @@ INIT → PARSE → ANALYZE → VERIFY → REPORT → DONE
 
 - **C/C++:** Buffer overflow (CWE-120), format string (CWE-134), double free (CWE-415), null pointer (CWE-476), command injection (CWE-78)
 - **Python:** Code injection (CWE-95), deserialization (CWE-502), command injection (CWE-78), SQL injection (CWE-89)
-- **Detection methods:** Regex patterns + Tree-sitter AST + Semgrep rules
+- **Detection methods:** Regex patterns + Semgrep rules
 
 ###4.2 LLM Semantic Analysis
 
@@ -251,7 +251,7 @@ Real CVE data retrieved from NVD:
 | Language | Python3.12 |
 | LLM | Qwen2.5-Coder-7B-Instruct (GGUF Q4_K_M) |
 | LLM Runtime | llama.cpp with HIP backend |
-| Static Analysis | Regex + Tree-sitter + Semgrep |
+| Static Analysis | Regex + Semgrep |
 | CVE Database | NVD API (National Vulnerability Database) |
 | Memory | JSON-based dual memory system |
 | CLI | Rich terminal UI |

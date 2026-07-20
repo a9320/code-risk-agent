@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import re
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -257,6 +258,7 @@ class StaticAnalyzer:
 
     def __init__(self):
         self._risk_counter = 0
+        self._counter_lock = threading.Lock()
 
     def analyze(self, code_file: CodeFile) -> list[Risk]:
         """分析单个文件，返回风险列表"""
@@ -425,12 +427,14 @@ class StaticAnalyzer:
     # ─── 工具方法 ────────────────────────────────────────────────
 
     def _make_risk(self, **kwargs) -> Risk:
-        self._risk_counter += 1
+        with self._counter_lock:
+            self._risk_counter += 1
+            risk_id = f"RISK-{self._risk_counter:03d}"
         snippet = kwargs.pop("snippet")
         source = kwargs.pop("source")
         reasoning = kwargs.pop("reasoning")
         return Risk(
-            id=f"RISK-{self._risk_counter:03d}",
+            id=risk_id,
             evidence=[Evidence(
                 source=source,
                 snippet=snippet,
