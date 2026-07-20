@@ -75,10 +75,12 @@ class DeepVerifier:
         llm_client: Optional[LLMClient] = None,
         memory: Optional[MemoryLayer] = None,
         cve_client: Optional[CVEClient] = None,
+        max_reflection_rounds: int = 2,
     ):
         self.llm = llm_client
         self.memory = memory or MemoryLayer()
         self.cve = cve_client or CVEClient()
+        self.max_reflection_rounds = max_reflection_rounds
 
     def verify_batch(
         self,
@@ -115,16 +117,30 @@ class DeepVerifier:
         if suppressed > 0:
             console.print(f"  [dim]  Suppressed {suppressed} known false positives[/]")
 
-        # Self-reflection: ask LLM to find missed risks
+        # Self-reflection: ask LLM to find missed risks (ITERATIVE)
         if self.llm:
             for f in files:
                 file_risks = [r for r in verified_risks if r.file_path == f.path]
-                missed = self._reflect_on_file(f, file_risks)
-                if missed:
+                all_new_risks: list[Risk] = []
+                current_risks = list(file_risks)
+
+                for round_num in range(self.max_reflection_rounds):
+                    missed = self._reflect_on_file(f, current_risks)
+                    if not missed:
+                        if round_num > 0:
+                            console.print(
+                                f"  [dim]  Reflection converged after {round_num + 1} rounds[/]"
+                            )
+                        break
+
                     console.print(
-                        f"  [yellow]  Agent 3 found {len(missed)} missed risks in {f.path}[/]"
+                        f"  [yellow]  Agent 3 round {round_num + 1}: "
+                        f"found {len(missed)} more risks in {f.path}[/]"
                     )
-                    verified_risks.extend(missed)
+                    all_new_risks.extend(missed)
+                    current_risks = current_risks + missed
+
+                verified_risks.extend(all_new_risks)
 
         return verified_risks
 
