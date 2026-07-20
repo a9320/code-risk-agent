@@ -32,14 +32,14 @@ DEFAULT_CONFIGS = {
     LLMBackend.LOCAL_HTTP: LLMConfig(
         backend=LLMBackend.LOCAL_HTTP,
         api_url="http://localhost:8080",
-        model="qwen2.5-coder-7b-instruct",
+        model="qwen2.5-coder-32b-instruct",
         temperature=0.1,
         max_tokens=8192,
     ),
     LLMBackend.LOCAL_LLAMA_CPP: LLMConfig(
         backend=LLMBackend.LOCAL_LLAMA_CPP,
-        model_path="/workspace/llama.cpp/models/qwen2.5-coder-7b-instruct-q4_k_m.gguf",
-        model="qwen2.5-coder-7b-instruct",
+        model_path="/workspace/models/qwen2.5-coder-32b-instruct-q4_k_m.gguf",
+        model="qwen2.5-coder-32b-instruct",
         temperature=0.1,
         max_tokens=8192,
     ),
