@@ -25,10 +25,15 @@
 
 ---
 
-## Improvement 1: Parallel Agent Execution
+## Improvement 1: Parallel Agent Execution (Planned)
 
 **Current:** Agent 1 → Agent 2 (sequential, per file)
-**Proposed:** Agent 1 (all files) ‖ Agent 2 (per file, parallel)
+**Planned:** Agent 1 (all files) ‖ Agent 2 (per file, parallel)
+
+> Note: Agent 2 depends on Agent 1's output for validation. The parallelization
+> strategy is to run Agent 1 on all files first, then run Agent 2 on all files
+> in parallel (not per-file sequential). This requires architectural changes
+> to the Orchestrator and is planned for a future release.
 
 ```python
 # Current (sequential):

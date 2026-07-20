@@ -171,8 +171,8 @@ INIT → PARSE → ANALYZE → VERIFY → REPORT → DONE
 | Component | Value |
 |-----------|-------|
 | GPU | AMD Radeon RX 7900 XTX (gfx1100) |
-| ROCm |7.2.4 |
-| HIP |7.2.53211 |
+| ROCm | 7.2.4 |
+| HIP | 7.2.53211 |
 | Platform | Radeon Cloud container |
 
 ###5.2 Key Discovery
@@ -194,10 +194,13 @@ cmake --build build --config Release -j$(nproc)
 
 | Metric | CPU | GPU (HIP) | Improvement |
 |--------|-----|-----------|-------------|
-| Token generation |6.8 t/s |105 t/s | **15.4x** |
-| Prompt processing | — |628 t/s | — |
-| VRAM usage | — |24% (~5GB) | — |
-| GPU temperature | — |26°C | — |
+| Token generation | 6.8 t/s | 105 t/s | **15.4×** |
+| Prompt processing | — | 628 t/s | — |
+| VRAM usage | — | 24% (~5 GB) | — |
+| GPU temperature | — | 26°C | — |
+
+> All performance data was measured on our Radeon Cloud instance
+> (RX 7900 XTX, ROCm 7.2.4, HIP backend).
 
 ###5.5 Optimization Strategies
 

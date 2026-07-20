@@ -43,7 +43,7 @@ python3 main.py analyze tests/test_cases/ --output terminal
 
 **[Screen: Split view — left: Semgrep output, right: CodeRisk output]**
 
-> "But here's the difference. Semgrep sees `strcpy` and flags it. CodeRisk Agent looks at the context — the input is already validated. Risk downgraded to LOW."
+> "But here's the difference. Semgrep sees `strcpy` and flags it — it needs human-written rules for context. CodeRisk Agent uses LLM to automatically understand the context — the input is already validated. Risk downgraded to LOW."
 
 > "And Agent 3's self-reflection found something Semgrep completely missed: a `malloc()` without NULL check at line 58. That's a real vulnerability that static analysis alone would miss."
 

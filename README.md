@@ -177,6 +177,9 @@ CodeRisk Agent is optimized for AMD Radeon GPUs via ROCm/HIP.
 
 ### Performance
 
+> All performance data was measured on our Radeon Cloud instance
+> (RX 7900 XTX, ROCm 7.2.4, HIP backend).
+
 | Metric | CPU | AMD GPU (HIP) | Speedup |
 |--------|-----|---------------|---------|
 | Token generation | 6.8 t/s | 105 t/s | **15.4×** |
@@ -282,6 +285,13 @@ pytest --cov=. --cov-report=html
 MIT
 
 ---
+
+## Known Limitations
+
+- **Radeon Cloud container:** HIP backend requires `GGML_HIP=ON` (not the older `GGML_HIPBLAS=ON`). On bare-metal systems, both flags may work.
+- **Language support:** Currently C and Python only. Java, Go, Rust planned for future releases.
+- **Semgrep integration:** Requires Semgrep CLI installed separately. The system works without it but loses one analysis layer.
+- **Memory learning:** Requires 2+ scans to activate false positive suppression. Single-run results may include known false positives.
 
 ## Acknowledgments
 
