@@ -102,7 +102,7 @@ class ReportGenerator:
             "meta": {
                 "model_used": result.model_used,
                 "analysis_time_ms": result.analysis_time_ms,
-                "version": "0.3.1",
+                "version": "0.3.2",
             },
         }
 
@@ -319,7 +319,7 @@ class ReportGenerator:
                     },
                 },
                 "results": sarif_results,
-                "columnKindCodeUnits": "utf16CodeUnits",
+                "columnKind": "utf16CodeUnits",
             }],
         }
 

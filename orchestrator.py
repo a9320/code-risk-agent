@@ -35,7 +35,7 @@ from core.models import (
 
 console = Console()
 
-MIN_LINES_FOR_LLM = 20
+MIN_LINES_FOR_LLM = 5
 MAX_STATIC_WORKERS = 4   # CPU-bound parallelism
 MAX_SEMANTIC_WORKERS = 2  # GPU-bound, limited concurrency
 

@@ -47,6 +47,7 @@ class MemoryEntry:
         confidence: str,
         source_count: int = 1,
         last_seen: float = 0.0,
+        memory_type: str = "correct",
     ):
         self.pattern_hash = pattern_hash
         self.cwe_id = cwe_id
@@ -57,6 +58,7 @@ class MemoryEntry:
         self.confidence = confidence
         self.source_count = source_count
         self.last_seen = last_seen or time.time()
+        self.memory_type = memory_type
 
     def to_dict(self) -> dict:
         return {
@@ -69,6 +71,7 @@ class MemoryEntry:
             "confidence": self.confidence,
             "source_count": self.source_count,
             "last_seen": self.last_seen,
+            "memory_type": self.memory_type,
         }
 
     @classmethod
@@ -130,16 +133,18 @@ class MemoryLayer:
                 description=risk.description,
                 suggestion=risk.suggestion,
                 confidence="low",
+                memory_type="error",
             )
 
         if self.persist:
             self._save()
 
-    def recall(self, risk: Risk) -> Optional[MemoryEntry]:
+    def recall(self, risk: Risk) -> Optional[tuple[MemoryEntry, str]]:
         """Check if a risk pattern matches known correct/incorrect patterns.
 
         Returns:
-            MemoryEntry if found, None otherwise
+            (MemoryEntry, memory_type) if found, None otherwise.
+            memory_type is "error" or "correct".
         """
         pattern_hash = self._hash_risk_pattern(risk)
 
@@ -151,7 +156,7 @@ class MemoryLayer:
                     f"[dim]  Memory: suppressed known false positive {risk.id} "
                     f"(seen {entry.source_count} times)[/]"
                 )
-                return entry
+                return (entry, "error")
 
         # Check correct memory (boost confidence for known patterns)
         if pattern_hash in self._correct_memory:
@@ -160,7 +165,7 @@ class MemoryLayer:
                 f"[dim]  Memory: recalled pattern for {risk.id} "
                 f"(seen {entry.source_count} times)[/]"
             )
-            return entry
+            return (entry, "correct")
 
         return None
 
@@ -182,8 +187,15 @@ class MemoryLayer:
         if risk.evidence:
             code_pattern = risk.evidence[0].snippet[:100]
 
-        # Normalize: replace variable names (>2 chars) with <VAR>
-        normalized = re.sub(r'\b[a-zA-Z_]\w{2,}\b', '<VAR>', code_pattern)
+        # Normalize: replace variable names with <VAR>, preserve keywords
+        _KEYWORDS = {'if', 'for', 'while', 'return', 'int', 'char', 'void',
+                     'def', 'class', 'import', 'from', 'in', 'is', 'not',
+                     'and', 'or', 'True', 'False', 'None', 'NULL', 'sizeof',
+                     'struct', 'else', 'elif', 'try', 'except', 'with', 'as'}
+        def _replace(match):
+            word = match.group(0)
+            return '<VAR>' if word not in _KEYWORDS and not word.isdigit() else word
+        normalized = re.sub(r'\b[a-zA-Z_]\w*\b', _replace, code_pattern)
         # Normalize: replace string literals with <STR>
         normalized = re.sub(r'"[^"]*"', '<STR>', normalized)
         normalized = re.sub(r"'[^']*'", '<STR>', normalized)

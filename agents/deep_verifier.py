@@ -98,13 +98,19 @@ class DeepVerifier:
 
         for risk in risks:
             # Check memory first
-            memory_entry = self.memory.recall(risk)
+            memory_result = self.memory.recall(risk)
 
-            if memory_entry and memory_entry.source_count >= 2:
-                # Known false positive - suppress
-                if risk.id not in [r.id for r in verified_risks]:
-                    suppressed += 1
-                    continue
+            if memory_result:
+                entry, mem_type = memory_result
+                if mem_type == "error" and entry.source_count >= 2:
+                    # Known false positive - suppress
+                    if risk.id not in [r.id for r in verified_risks]:
+                        suppressed += 1
+                        continue
+                elif mem_type == "correct":
+                    # Known true positive - boost confidence
+                    if risk.confidence != Confidence.HIGH:
+                        risk = risk.model_copy(update={"confidence": Confidence.HIGH})
 
             # Triple cross-validation
             verified = self._verify_single_risk(risk)
