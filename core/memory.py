@@ -11,6 +11,7 @@ false positives get suppressed.
 from __future__ import annotations
 
 import hashlib
+import re
 import json
 import os
 import time
@@ -172,17 +173,22 @@ class MemoryLayer:
         }
 
     def _hash_risk_pattern(self, risk: Risk) -> str:
-        """Create a hash of the risk pattern for matching.
+        """Create a normalized hash of the risk pattern for matching.
 
-        Uses CWE + file extension + code pattern to identify similar risks.
+        Normalizes variable names to <VAR> and strings to <STR>
+        so that similar patterns with different variable names match.
         """
-        # Extract code snippet pattern (first 100 chars of evidence)
         code_pattern = ""
         if risk.evidence:
             code_pattern = risk.evidence[0].snippet[:100]
 
-        # Hash: CWE + language + code pattern
-        key = f"{risk.cwe_id}:{risk.language}:{code_pattern}"
+        # Normalize: replace variable names (>2 chars) with <VAR>
+        normalized = re.sub(r'\b[a-zA-Z_]\w{2,}\b', '<VAR>', code_pattern)
+        # Normalize: replace string literals with <STR>
+        normalized = re.sub(r'"[^"]*"', '<STR>', normalized)
+        normalized = re.sub(r"'[^']*'", '<STR>', normalized)
+
+        key = f"{risk.cwe_id}:{risk.language}:{normalized}"
         return hashlib.sha256(key.encode()).hexdigest()[:16]
 
     def _save(self):

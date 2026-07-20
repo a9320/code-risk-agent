@@ -49,8 +49,8 @@ MAX_RETRIES = 3
 RETRY_BASE_DELAY = 1.0
 
 # Qwen2.5 ChatML special tokens
-_IM_START = "<im_start>"
-_IM_END = "<im_end>"
+_IM_START = "<im|start>"
+_IM_END = "</im|end>"
 _ENDOFTEXT = "<|endoftext|>"
 
 

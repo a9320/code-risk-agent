@@ -6,6 +6,7 @@ Wraps Semgrep CLI to scan files and convert results to Risk objects.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -33,7 +34,7 @@ _SEVERITY_MAP = {
 
 def run_semgrep(
     file_path: Path,
-    config: str = "p/default",
+    config: str = os.getenv("SEMGREP_RULES", "p/default"),
     timeout: int = 30,
 ) -> list[dict]:
     """Run Semgrep on a single file, return raw results."""
@@ -125,7 +126,7 @@ def semgrep_to_risks(
 
 def analyze_with_semgrep(
     code_file: CodeFile,
-    config: str = "p/default",
+    config: str = os.getenv("SEMGREP_RULES", "p/default"),
     risk_counter_start: int = 0,
 ) -> list[Risk]:
     """Full pipeline: run Semgrep on a file and return Risk objects."""

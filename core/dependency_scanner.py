@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
+from core.retry import retry
 from rich.console import Console
 
 console = Console()
@@ -26,6 +27,7 @@ OSV_TIMEOUT = 10
 # ─── OSV API Client ─────────────────────────────────────────────
 
 
+@retry(max_retries=2, exceptions=(httpx.RequestError, httpx.TimeoutException))
 def _query_osv(package_name: str, version: str, ecosystem: str = "PyPI") -> list[dict]:
     """Query OSV API for vulnerabilities of a specific package version."""
     try:
