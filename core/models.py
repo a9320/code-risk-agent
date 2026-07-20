@@ -132,6 +132,7 @@ class AnalysisResult(BaseModel):
     risks: list[Risk] = Field(default_factory=list)
     analysis_time_ms: int = 0
     model_used: str = ""
+    perf_timings: dict[str, float] = Field(default_factory=dict, description="Phase timing in ms")
     timestamp: datetime = Field(default_factory=datetime.now)
 
     @computed_field

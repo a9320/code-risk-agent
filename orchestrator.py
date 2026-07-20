@@ -70,6 +70,7 @@ class Orchestrator:
     ) -> AnalysisResult:
         """Run the complete analysis pipeline."""
         start_time = time.monotonic()
+        perf_timings: dict[str, float] = {}  # Phase -> duration_ms
 
         # State: PARSE
         self.state = State.PARSE
@@ -91,6 +92,7 @@ class Orchestrator:
         all_risks = []
 
         # Phase 1: Static analysis
+        t0 = time.monotonic()
         console.print("[bold]  Phase 1: Static analysis (Agent 1)[/]")
         for f in valid_files:
             risks = self.static_analyzer.analyze(f)
@@ -99,8 +101,10 @@ class Orchestrator:
                 console.print(f"  [red]  {f.path}: {len(risks)} risks[/]")
             else:
                 console.print(f"  [green]  {f.path}: clean[/]")
+        perf_timings['agent1_static'] = (time.monotonic() - t0) * 1000
 
         # Phase 1.5: Dependency scanning
+        t0 = time.monotonic()
         console.print("\n[bold]  Phase 1.5: Dependency scanning[/]")
         try:
             from pathlib import Path
@@ -135,8 +139,10 @@ class Orchestrator:
                 console.print("  [green]  Dependencies: clean[/]")
         except Exception as e:
             console.print(f"[dim]  Dependency scan skipped: {e}[/]")
+        perf_timings['dep_scan'] = (time.monotonic() - t0) * 1000
 
         # Phase 2: Semgrep
+        t0 = time.monotonic()
         console.print("\n[bold]  Phase 2: Semgrep analysis[/]")
         try:
             from core.semgrep_runner import analyze_with_semgrep
@@ -149,8 +155,10 @@ class Orchestrator:
                     all_risks.extend(semgrep_risks)
         except Exception as e:
             console.print(f"[dim]  Semgrep skipped: {e}[/]")
+        perf_timings['semgrep'] = (time.monotonic() - t0) * 1000
 
         # Phase 2.5: Taint analysis (data flow tracking)
+        t0 = time.monotonic()
         console.print("\n[bold]  Phase 2.5: Taint analysis (data flow)[/]")
         for f in valid_files:
             try:
@@ -189,9 +197,11 @@ class Orchestrator:
                     console.print(f"  [green]  Taint {f.path}: clean[/]")
             except Exception as e:
                 console.print(f"[dim]  Taint analysis skipped for {f.path}: {e}[/]")
+        perf_timings['taint'] = (time.monotonic() - t0) * 1000
 
         # Phase 3: LLM semantic analysis
         if request.enable_ai and self.semantic_analyzer:
+            t0 = time.monotonic()
             console.print("\n[bold]  Phase 3: LLM semantic analysis (Agent 2)[/]")
             for f in valid_files:
                 file_risks = [r for r in all_risks if r.file_path == f.path]
@@ -204,9 +214,11 @@ class Orchestrator:
                     all_risks.extend(enriched)
                 except Exception as e:
                     console.print(f"  [yellow]  LLM failed for {f.path}: {e}[/]")
+            perf_timings['agent2_llm'] = (time.monotonic() - t0) * 1000
 
         # State: VERIFY
         self.state = State.VERIFY
+        t0 = time.monotonic()
         console.print("\n[bold]  Phase 4: Deep verification (Agent 3)[/]")
         mem_stats = self.memory.get_stats()
         console.print(
@@ -214,6 +226,7 @@ class Orchestrator:
             f"{mem_stats['error_patterns']} error patterns loaded[/]"
         )
         all_risks = self.verifier.verify_batch(valid_files, all_risks)
+        perf_timings['agent3_verify'] = (time.monotonic() - t0) * 1000
 
         # State: REPORT
         self.state = State.REPORT
@@ -233,10 +246,23 @@ class Orchestrator:
         )
 
         console.print(f"\n[bold]  Phase 5: Report generation (Agent 4)[/]")
+        t0 = time.monotonic()
         if output_format == "terminal" or output_format == "all":
             self.reporter.print_terminal(result)
         if output_format in ("json", "md", "all"):
             self.reporter.save_report(result, formats=["json", "md"])
+        if output_format in ("sarif", "all"):
+            self.reporter.save_report(result, formats=["sarif"])
+        perf_timings['agent4_report'] = (time.monotonic() - t0) * 1000
+
+        # Store timings in result
+        result = result.model_copy(update={"perf_timings": perf_timings})
+
+        # Print performance summary
+        console.print("\n[bold cyan]  Performance Summary[/]")
+        for phase, ms in perf_timings.items():
+            pct = (ms / elapsed_ms * 100) if elapsed_ms > 0 else 0
+            console.print(f"  [dim]{phase:>20}: {ms:>8.0f} ms ({pct:>5.1f}%)[/]")
 
         self.state = State.DONE
         console.print(f"\n[green]  Analysis complete. {result.total_risks} risks found in {elapsed_ms}ms.[/]")

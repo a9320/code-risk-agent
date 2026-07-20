@@ -8,7 +8,7 @@ Usage:
 Options:
     --no-ai                    Disable LLM semantic analysis
     --semgrep-config <rules>   Semgrep rules (default: p/default)
-    --output <format>          Output format: terminal|json|md|all (default: terminal)
+    --output <format>          Output format: terminal|json|md|sarif|all (default: terminal)
 """
 
 from __future__ import annotations

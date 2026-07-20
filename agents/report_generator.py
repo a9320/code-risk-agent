@@ -214,6 +214,115 @@ class ReportGenerator:
 
         return "\n".join(lines)
 
+    def generate_sarif(self, result: AnalysisResult) -> dict:
+        """Generate SARIF 2.1.0 report.
+
+        Static Analysis Results Interchange Format — OASIS standard.
+        Compatible with GitHub Code Scanning, VS Code SARIF Viewer,
+        Azure DevOps, and other SARIF consumers.
+        """
+        # Severity -> SARIF level mapping
+        level_map = {
+            Severity.CRITICAL: "error",
+            Severity.HIGH: "error",
+            Severity.MEDIUM: "warning",
+            Severity.LOW: "note",
+            Severity.INFO: "none",
+        }
+
+        # Build rules from unique CWEs
+        rules = []
+        seen_cwes = set()
+        for risk in result.risks:
+            cwe = risk.cwe_id or "CWE-000"
+            if cwe not in seen_cwes:
+                seen_cwes.add(cwe)
+                rules.append({
+                    "id": cwe,
+                    "name": risk.title,
+                    "shortDescription": {"text": risk.title},
+                    "fullDescription": {"text": risk.description[:500]},
+                    "help": {"text": risk.suggestion},
+                    "defaultConfiguration": {
+                        "level": level_map.get(risk.severity, "warning")
+                    },
+                    "properties": {
+                        "tags": ["security", cwe.lower().replace("cwe-", "cwe-")],
+                    },
+                })
+
+        # Build results
+        sarif_results = []
+        for risk in result.risks:
+            cve_ids = _extract_cve_ids(risk.description)
+            sarif_result = {
+                "ruleId": risk.cwe_id or "CWE-000",
+                "ruleIndex": next(
+                    (i for i, r in enumerate(rules) if r["id"] == risk.cwe_id), 0
+                ),
+                "level": level_map.get(risk.severity, "warning"),
+                "message": {
+                    "text": f"{risk.title}: {risk.description[:300]}"
+                },
+                "locations": [{
+                    "physicalLocation": {
+                        "artifactLocation": {
+                            "uri": str(risk.file_path),
+                            "uriBaseId": "%SRCROOT%",
+                        },
+                        "region": {
+                            "startLine": risk.line_start,
+                            "endLine": risk.line_end,
+                        },
+                    },
+                }],
+                "fingerprints": {
+                    "coderisk/v1": risk.id,
+                },
+            }
+
+            # Add CWE as a property
+            if risk.cwe_id:
+                sarif_result["properties"] = {
+                    "cwe": risk.cwe_id,
+                    "confidence": risk.confidence.value,
+                }
+
+            # Add CVE references
+            if cve_ids:
+                sarif_result["relatedLocations"] = [
+                    {
+                        "id": i,
+                        "physicalLocation": {
+                            "artifactLocation": {
+                                "uri": _cve_url(c),
+                            },
+                        },
+                        "message": {"text": f"CVE reference: {c}"},
+                    }
+                    for i, c in enumerate(cve_ids)
+                ]
+
+            sarif_results.append(sarif_result)
+
+        return {
+            "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+            "version": "2.1.0",
+            "runs": [{
+                "tool": {
+                    "driver": {
+                        "name": "CodeRisk Agent",
+                        "version": "0.3.2",
+                        "informationUri": "https://github.com/a9320/code-risk-agent",
+                        "semanticVersion": "0.3.2",
+                        "rules": rules,
+                    },
+                },
+                "results": sarif_results,
+                "columnKindCodeUnits": "utf16CodeUnits",
+            }],
+        }
+
     def print_terminal(self, result: AnalysisResult) -> None:
         """Print rich terminal output."""
         summary_table = Table(
@@ -347,5 +456,13 @@ class ReportGenerator:
                 f.write(md_content)
             saved.append(md_path)
             console.print(f"[dim]Markdown report saved: {md_path}[/]")
+
+        if "sarif" in formats:
+            sarif_path = os.path.join(output_dir, f"{base_name}.sarif")
+            sarif_report = self.generate_sarif(result)
+            with open(sarif_path, "w") as f:
+                json.dump(sarif_report, f, indent=2, ensure_ascii=False)
+            saved.append(sarif_path)
+            console.print(f"[dim]SARIF report saved: {sarif_path}[/]")
 
         return saved

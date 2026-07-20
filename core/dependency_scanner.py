@@ -1,7 +1,8 @@
 """Dependency Scanner Module
 
-Inspired by Vuls - scans project dependencies for known vulnerabilities.
-Checks requirements.txt, package.json, pyproject.toml for outdated/vulnerable packages.
+Scans project dependencies for known vulnerabilities.
+Primary source: OSV API (https://api.osv.dev) — real-time vulnerability database.
+Fallback: local hardcoded vulnerable package dictionary.
 """
 
 from __future__ import annotations
@@ -11,11 +12,80 @@ import re
 from pathlib import Path
 from typing import Optional
 
+import httpx
 from rich.console import Console
 
 console = Console()
 
 # Known vulnerable package versions (simplified - in production use OSV/NVD API)
+OSV_API_URL = "https://api.osv.dev/v1/query"
+OSV_BATCH_URL = "https://api.osv.dev/v1/querybatch"
+OSV_TIMEOUT = 10
+
+
+# ─── OSV API Client ─────────────────────────────────────────────
+
+
+def _query_osv(package_name: str, version: str, ecosystem: str = "PyPI") -> list[dict]:
+    """Query OSV API for vulnerabilities of a specific package version."""
+    try:
+        client = httpx.Client(timeout=OSV_TIMEOUT)
+        resp = client.post(
+            OSV_API_URL,
+            json={
+                "version": version,
+                "package": {"name": package_name, "ecosystem": ecosystem},
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        vulns = data.get("vulnerabilities", [])
+        results = []
+        for v in vulns:
+            v_id = v.get("id", "unknown")
+            aliases = v.get("aliases", [])
+            summary = v.get("summary", v.get("details", "")[:200])
+            severity = "unknown"
+            # Extract severity from database_specific or severity field
+            for sev in v.get("severity", []):
+                if sev.get("type") == "CVSS_V3":
+                    score_str = sev.get("score", "")
+                    # Parse CVSS vector for severity
+                    if "CRITICAL" in score_str.upper():
+                        severity = "critical"
+                    elif "HIGH" in score_str.upper():
+                        severity = "high"
+                    elif "MEDIUM" in score_str.upper():
+                        severity = "medium"
+                    elif "LOW" in score_str.upper():
+                        severity = "low"
+            # Extract CWE
+            cwe = ""
+            for ref in v.get("references", []):
+                url = ref.get("url", "")
+                if "cwe.mitre.org" in url:
+                    cwe_match = re.search(r'CWE-\d+', url)
+                    if cwe_match:
+                        cwe = cwe_match.group()
+                        break
+            # If no severity, try to infer from database_specific
+            if severity == "unknown":
+                db_sev = v.get("database_specific", {}).get("severity", "")
+                if db_sev:
+                    severity = db_sev.lower()
+            results.append({
+                "id": v_id,
+                "aliases": aliases,
+                "summary": summary[:200],
+                "severity": severity,
+                "cwe": cwe,
+            })
+        return results
+    except Exception:
+        return []
+
+
+# Known vulnerable package versions (local fallback when OSV is unavailable)
 VULNERABLE_PACKAGES = {
     # Python
     "django": {
@@ -86,7 +156,10 @@ def _version_below(current: str, threshold: str) -> bool:
 
 
 def scan_requirements_txt(file_path: Path) -> list[dict]:
-    """Scan Python requirements.txt for vulnerable packages."""
+    """Scan Python requirements.txt for vulnerable packages.
+
+    Uses OSV API as primary source, falls back to local dictionary.
+    """
     findings = []
     try:
         content = file_path.read_text(encoding="utf-8", errors="replace")
@@ -103,16 +176,33 @@ def scan_requirements_txt(file_path: Path) -> list[dict]:
         if match:
             pkg_name = match.group(1).lower()
             version = match.group(2)
-            if pkg_name in VULNERABLE_PACKAGES:
-                vuln = VULNERABLE_PACKAGES[pkg_name]
-                if _version_below(version, vuln["vulnerable_below"]):
+
+            # Try OSV API first
+            osv_vulns = _query_osv(pkg_name, version)
+            if osv_vulns:
+                for v in osv_vulns:
                     findings.append({
                         "package": pkg_name,
                         "version": version,
-                        "cwe": vuln["cwe"],
-                        "description": vuln["description"],
-                        "fix": f"Upgrade {pkg_name} to >= {vuln['vulnerable_below']}",
+                        "cwe": v.get("cwe", "CWE-000"),
+                        "description": v.get("summary", "Vulnerability found via OSV"),
+                        "fix": f"Upgrade {pkg_name} — see {v.get('id', 'OSV')} for details",
+                        "source": "osv",
+                        "osv_id": v.get("id", ""),
                     })
+            else:
+                # Fallback to local dictionary
+                if pkg_name in VULNERABLE_PACKAGES:
+                    vuln = VULNERABLE_PACKAGES[pkg_name]
+                    if _version_below(version, vuln["vulnerable_below"]):
+                        findings.append({
+                            "package": pkg_name,
+                            "version": version,
+                            "cwe": vuln["cwe"],
+                            "description": vuln["description"],
+                            "fix": f"Upgrade {pkg_name} to >= {vuln['vulnerable_below']}",
+                            "source": "local",
+                        })
 
     return findings
 

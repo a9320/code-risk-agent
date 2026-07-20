@@ -225,8 +225,9 @@ code-risk-agent/
 │   ├── cve_client.py          # NVD API client
 │   ├── semgrep_runner.py      # Semgrep integration
 │   ├── taint_analyzer.py      # Data flow tracking
-│   ├── dependency_scanner.py  # Vulnerable dependency detection
-│   └── attack_knowledge.py    # CWE/ATT&CK knowledge base
+│   ├── dependency_scanner.py  # Vulnerable dependency detection (OSV + local)
+│   ├── attack_knowledge.py    # CWE/ATT&CK knowledge base
+│   └── retry.py               # Unified retry policy
 ├── tests/
 │   └── test_static_analyzer.py
 ├── docs/
@@ -265,7 +266,9 @@ pytest --cov=. --cov-report=html
 | LLM Runtime | llama.cpp with HIP backend |
 | Static Analysis | Regex + Tree-sitter + Semgrep |
 | CVE Database | NVD API (National Vulnerability Database) |
+| Dependency Scan | OSV API + local fallback |
 | Memory | JSON-based dual memory system |
+| Output Formats | JSON, Markdown, SARIF 2.1.0, Rich terminal |
 | CLI | Rich terminal UI |
 | GPU | AMD Radeon RX 7900 XTX + ROCm 7.2.4 |
 
