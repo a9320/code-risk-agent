@@ -1,11 +1,7 @@
-# CodeRisk Agent — 完整项目文档
+# CodeRisk Agent
 
-> AMD AI DevMaster Hackathon | Track 2: Agentic AI
-> 团队: Yang Weike (Captain) + lolo (AI Assistant)
-> 版本: v0.3.2 | 日期: 2026-07-20
-> 仓库: https://github.com/a9320/code-risk-agent
-> GPU: Radeon Pro W7900 (48GB) | 模型: Qwen2.5-Coder-32B-Instruct Q4_K_M
-> 推理速度: 29.5 t/s | VRAM: 19.6GB / 48GB (41%)
+> v0.3.2 | 2026-07-20 | https://github.com/a9320/code-risk-agent
+> GPU: Radeon Pro W7900 (48GB) | Model: Qwen2.5-Coder-32B | 29.5 t/s
 
 ---
 
@@ -208,8 +204,8 @@ cd llama.cpp
 ROCM_PATH=/opt/rocm cmake -B build -DGGML_HIP=ON -DLLAMA_BUILD_SERVER=ON
 cmake --build build --config Release -j$(nproc)
 
-# Download Qwen2.5-Coder-7B-Instruct GGUF
-huggingface-cli download Qwen/Qwen2.5-Coder-7B-Instruct-GGUF \
+# Download Qwen2.5-Coder-32B-Instruct GGUF
+huggingface-cli download Qwen/Qwen2.5-Coder-32B-Instruct-GGUF \
   qwen2.5-coder-7b-instruct-q4_k_m.gguf --local-dir models/
 
 # Run inference
@@ -275,7 +271,7 @@ pytest --cov=. --cov-report=html
 | Component | Technology |
 |-----------|-----------|
 | Language | Python 3.12 |
-| LLM | Qwen2.5-Coder-7B-Instruct (GGUF Q4_K_M) |
+| LLM | Qwen2.5-Coder-32B-Instruct (GGUF Q4_K_M) |
 | LLM Runtime | llama.cpp with HIP backend |
 | Static Analysis | Regex + Semgrep |
 | CVE Database | NVD API (National Vulnerability Database) |
@@ -902,83 +898,7 @@ HIP compiled successfully and GPU inference is fully operational:
 
 ---
 
-# 5. Submission Checklist
-
-# Hackathon Submission Checklist
-
-> AMD AI DevMaster Hackathon Track 2: Agentic AI
-> Deadline: 2026-08-06 23:59 UTC+8
-
----
-
-## Required Materials
-
-| Material | Status | Location |
-|----------|--------|----------|
-| Source Code | ✅ Done | https://github.com/a9320/Radeon-hackathon-2026-07 |
-| README (English) | ✅ Done | code-risk-agent/README.md |
-| Project Spec Doc | ⏳ TODO | docs/project-spec.md |
-| Demo Video (3-5 min) | ⏳ TODO | scripts/run_demo.sh (script ready) |
-| ROCm Optimization Doc | ✅ Done | docs/rocm-optimization.md |
-| Performance Data | ⏳ TODO | Need Radeon Cloud test |
-
----
-
-## Code Completeness
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Agent 1: Static Analyzer | ✅ | Regex patterns, 11 CWE rules |
-| Agent 2: Semantic Analyzer | ✅ | LLM-driven, ChatML format |
-| Agent 3: Deep Verifier | ✅ | Triple cross-validation + memory |
-| Agent 4: Report Generator | ✅ | JSON/Markdown/Rich + CWE/CVE links |
-| Orchestrator | ✅ | State machine pipeline |
-| Memory Layer | ✅ | Correct + Error memory |
-| CVE Client | ✅ | NVD API integration |
-| Semgrep Integration | ✅ | CLI wrapper |
-| CLI | ✅ | analyze/demo/info commands |
-| Tests | ✅ | 13/13 passing |
-| Demo Script | ✅ | scripts/run_demo.sh |
-
----
-
-## Pre-Submission Checklist
-
-- [ ] All code in English (comments, README, docs)
-- [ ] README has setup instructions
-- [ ] .env.example has all required vars
-- [ ] pyproject.toml version updated
-- [ ] No API keys in committed code
-- [ ] Git history clean
-- [ ] Hackathon fork repo up to date
-
----
-
-## Submission Process
-
-1. Fork official repo: https://github.com/AMD-DEV-CONTEST/Radeon-hackathon-2026-07
-2. Push all code to fork
-3. Create PR with title: `Track 2, [Team Name], CodeRisk Agent`
-4. Attach demo video
-5. Attach project spec document
-
----
-
-## Timeline
-
-| Date | Task |
-|------|------|
-| 7.19-7.20 | ✅ Core code complete |
-| 7.21-7.25 | ROCm testing + performance data |
-| 7.26-7.31 | Demo video + project spec |
-| 8.1-8.3 | Polish + final testing |
-| 8.4-8.5 | Review + fix |
-| 8.6 | Submit |
-
-
----
-
-# 6. Module Analysis
+# 5. Module Analysis
 
 # CodeRisk Agent — 模块准确性、可行性与优化方向分析
 
@@ -1584,7 +1504,7 @@ CodeRisk Agent 的核心价值不在单个模块的完美，而在 **多 Agent �
 
 ---
 
-# 7. Demo Video Script
+# 6. Demo Video Script
 
 # CodeRisk Agent — Demo Video Script v4
 
@@ -2043,7 +1963,7 @@ if __name__ == "__main__":
 ```
 
 
-## orchestrator.py (352 lines)
+## orchestrator.py (368 lines)
 
 ```python
 """Orchestrator: State Machine Pipeline
@@ -2086,6 +2006,15 @@ console = Console()
 MIN_LINES_FOR_LLM = 5
 MAX_STATIC_WORKERS = 4   # CPU-bound parallelism
 MAX_SEMANTIC_WORKERS = 2  # GPU-bound, limited concurrency
+
+
+VALID_TRANSITIONS = {
+    State.INIT: {State.PARSE, State.ERROR},
+    State.PARSE: {State.ANALYZE, State.ERROR},
+    State.ANALYZE: {State.VERIFY, State.ERROR},
+    State.VERIFY: {State.REPORT, State.ERROR},
+    State.REPORT: {State.DONE, State.ERROR},
+}
 
 
 class State(str, Enum):
@@ -2394,6 +2323,13 @@ class Orchestrator:
 
         return Path(files[0].path).parent
 
+    def _transition(self, new_state: State) -> None:
+        """Validate and execute state transition."""
+        valid = VALID_TRANSITIONS.get(self.state, set())
+        if new_state not in valid:
+            raise ValueError(f"Invalid state transition: {self.state} -> {new_state}")
+        self.state = new_state
+
     @property
     def current_state(self) -> str:
         return self.state.value
@@ -2610,7 +2546,7 @@ def _detect_language(path: Path) -> Language:
 ```
 
 
-## core/llm_client.py (299 lines)
+## core/llm_client.py (331 lines)
 
 ```python
 """CodeRisk Agent - LLM Client
@@ -2636,6 +2572,27 @@ from core.models import LLMBackend, LLMConfig
 
 console = Console()
 
+def find_gguf_model() -> str:
+    """Auto-discover GGUF model file."""
+    import os
+    from pathlib import Path
+    # 1. Environment variable
+    if path := os.getenv("CODERISK_MODEL_PATH"):
+        return path
+    # 2. Common paths
+    search_paths = [
+        Path.home() / ".coderisk" / "models",
+        Path("/workspace/models"),
+        Path("/mnt/agents/output"),
+    ]
+    for dir_path in search_paths:
+        if dir_path.exists():
+            ggufs = sorted(dir_path.glob("*.gguf"), key=lambda p: p.stat().st_size, reverse=True)
+            if ggufs:
+                return str(ggufs[0])
+    return ""
+
+
 DEFAULT_CONFIGS = {
     LLMBackend.SHARED_API: LLMConfig(
         backend=LLMBackend.SHARED_API,
@@ -2653,7 +2610,7 @@ DEFAULT_CONFIGS = {
     ),
     LLMBackend.LOCAL_LLAMA_CPP: LLMConfig(
         backend=LLMBackend.LOCAL_LLAMA_CPP,
-        model_path="/workspace/models/qwen2.5-coder-32b-instruct-q4_k_m.gguf",
+        model_path=find_gguf_model() or "/workspace/models/qwen2.5-coder-32b-instruct-q4_k_m.gguf",
         model="qwen2.5-coder-32b-instruct",
         temperature=0.1,
         max_tokens=8192,
@@ -2832,9 +2789,20 @@ class LLMClient:
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
     ) -> dict:
-        """Send chat request, parse JSON from response."""
-        raw = self.chat(messages, temperature, max_tokens)
-        return _extract_json(raw)
+        """Send chat request, parse JSON with auto-retry on parse failure."""
+        last_err = None
+        msgs = list(messages)
+        for attempt in range(3):
+            raw = self.chat(msgs, temperature, max_tokens)
+            try:
+                return _extract_json(raw)
+            except (ValueError, KeyError) as e:
+                last_err = e
+                if attempt < 2:
+                    msgs = list(messages) + [{"role": "user", "content":
+                        f"Your response was not valid JSON. Error: {e}. Respond with valid JSON only."}]
+                    console.print(f"[yellow]JSON parse failed, retry {attempt+1}/3[/]")
+        raise ValueError(f"Failed to get valid JSON after 3 attempts: {last_err}")
 
     @property
     def stats(self) -> dict:
@@ -2915,7 +2883,7 @@ def _extract_json(text: str) -> dict:
 ```
 
 
-## core/memory.py (247 lines)
+## core/memory.py (252 lines)
 
 ```python
 """CodeRisk Agent - Memory Layer
@@ -2930,6 +2898,7 @@ false positives get suppressed.
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import re
 import json
@@ -3131,10 +3100,14 @@ class MemoryLayer:
         error_data = {k: v.to_dict() for k, v in self._error_memory.items()}
 
         with open(CORRECT_MEMORY_FILE, "w") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
             json.dump(correct_data, f, indent=2)
+            fcntl.flock(f, fcntl.LOCK_UN)
 
         with open(ERROR_MEMORY_FILE, "w") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
             json.dump(error_data, f, indent=2)
+            fcntl.flock(f, fcntl.LOCK_UN)
 
     def _load(self):
         """Load memory from disk."""
@@ -4747,7 +4720,7 @@ class StaticAnalyzer:
 ```
 
 
-## agents/semantic_analyzer.py (246 lines)
+## agents/semantic_analyzer.py (228 lines)
 
 ```python
 """Agent 2: Semantic Analyzer (LLM-driven)
@@ -4775,41 +4748,23 @@ from core.models import (
 
 console = Console()
 
-SYSTEM_PROMPT = """You are a senior code security auditor. Given:
-1. Source code of a file
-2. A list of risks found by static analysis
+SYSTEM_PROMPT = """You are a senior code security auditor performing deep vulnerability analysis.
 
-Your tasks:
-- VALIDATE each risk: is it a real vulnerability or a false positive?
-- ENRICH: provide attack scenario and impact for confirmed risks
-- MERGE duplicates: if multiple risks describe the same issue, merge them
-- ADD missed risks: if you spot vulnerabilities the static analyzer missed
+For EACH risk, follow this reasoning chain:
+1. Context Analysis: What is the function doing? Is this security-critical?
+2. Input Tracing: Where does the data come from? Is it attacker-controlled?
+3. Validation Check: Is there input validation before the dangerous operation?
+4. Exploitability: Can an attacker trigger this? What is the precondition?
+5. Classification: TRUE POSITIVE or FALSE POSITIVE?
 
-Output JSON format:
+Also scan for MISSED vulnerabilities that static analysis did not catch.
+
+Output MUST be valid JSON:
 {
-  "validated_risks": [
-    {
-      "id": "RISK-001",
-      "is_true_positive": true,
-      "attack_scenario": "...",
-      "impact": "...",
-      "adjusted_severity": "critical|high|medium|low|info",
-      "notes": "..."
-    }
-  ],
-  "new_risks": [
-    {
-      "title": "...",
-      "description": "...",
-      "severity": "critical|high|medium|low",
-      "cwe_id": "CWE-xxx",
-      "line_start": 10,
-      "line_end": 10,
-      "attack_scenario": "...",
-      "suggestion": "..."
-    }
-  ]
-}"""
+  "validated_risks": [{"id": "RISK-001", "is_true_positive": true, "reasoning": "...", "attack_scenario": "...", "impact": "...", "adjusted_severity": "critical|high|medium|low|info", "confidence": 0.85}],
+  "new_risks": [{"title": "...", "description": "...", "severity": "critical|high|medium|low", "cwe_id": "CWE-xxx", "line_start": 10, "line_end": 10, "attack_scenario": "...", "suggestion": "..."}]
+}
+"""
 
 
 class SemanticAnalyzer:
@@ -5777,178 +5732,7 @@ class ReportGenerator:
 ```
 
 
-# Tests
-
-
-## tests/__init__.py
-
-```python
-# CodeRisk Agent - Tests
-
-```
-
-
-## tests/test_static_analyzer.py
-
-```python
-"""Tests for CodeRisk Agent - Static Analyzer"""
-
-import sys
-from pathlib import Path
-
-import pytest
-
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from agents.static_analyzer import StaticAnalyzer
-from core.models import CodeFile, Language, Severity
-
-
-@pytest.fixture
-def analyzer():
-    return StaticAnalyzer()
-
-
-# ─── CWE-120: Buffer Overflow ────────────────────────────────────
-
-class TestBufferOverflow:
-    def test_detects_gets(self, analyzer):
-        """gets() should be flagged as CRITICAL (CWE-120)"""
-        code = '#include <stdio.h>\nint main() { char buf[10]; gets(buf); }'
-        f = CodeFile(path="test.c", content=code, language=Language.C)
-        risks = analyzer.analyze(f)
-        assert any(r.cwe_id == "CWE-120" and r.severity == Severity.CRITICAL for r in risks)
-
-    def test_detects_strcpy(self, analyzer):
-        """strcpy() should be flagged as HIGH (CWE-120)"""
-        code = '#include <string.h>\nvoid f(char *s) { char b[10]; strcpy(b, s); }'
-        f = CodeFile(path="test.c", content=code, language=Language.C)
-        risks = analyzer.analyze(f)
-        assert any("strcpy" in r.title and r.severity == Severity.HIGH for r in risks)
-
-
-# ─── CWE-78: Command Injection ──────────────────────────────────
-
-class TestCommandInjection:
-    def test_detects_system_c(self, analyzer):
-        """system() in C should be flagged as HIGH (CWE-78)"""
-        code = '#include <stdlib.h>\nvoid f() { system("ls"); }'
-        f = CodeFile(path="test.c", content=code, language=Language.C)
-        risks = analyzer.analyze(f)
-        assert any(r.cwe_id == "CWE-78" and r.severity == Severity.HIGH for r in risks)
-
-    def test_detects_os_system_python(self, analyzer):
-        """os.system() in Python should be flagged as HIGH (CWE-78)"""
-        code = 'import os\nos.system("ls")'
-        f = CodeFile(path="test.py", content=code, language=Language.PYTHON)
-        risks = analyzer.analyze(f)
-        assert any(r.cwe_id == "CWE-78" and r.severity == Severity.HIGH for r in risks)
-
-
-# ─── CWE-95: Code Injection ─────────────────────────────────────
-
-class TestCodeInjection:
-    def test_detects_eval(self, analyzer):
-        """eval() should be flagged as CRITICAL (CWE-95)"""
-        code = 'x = eval(input())'
-        f = CodeFile(path="test.py", content=code, language=Language.PYTHON)
-        risks = analyzer.analyze(f)
-        assert any(r.cwe_id == "CWE-95" and r.severity == Severity.CRITICAL for r in risks)
-
-    def test_detects_exec(self, analyzer):
-        """exec() should be flagged as CRITICAL (CWE-95)"""
-        code = 'exec("print(1)")'
-        f = CodeFile(path="test.py", content=code, language=Language.PYTHON)
-        risks = analyzer.analyze(f)
-        assert any(r.cwe_id == "CWE-95" and r.severity == Severity.CRITICAL for r in risks)
-
-
-# ─── CWE-502: Deserialization ───────────────────────────────────
-
-class TestDeserialization:
-    def test_detects_pickle(self, analyzer):
-        """pickle.loads() should be flagged as CRITICAL (CWE-502)"""
-        code = 'import pickle\ndata = pickle.loads(b"abc")'
-        f = CodeFile(path="test.py", content=code, language=Language.PYTHON)
-        risks = analyzer.analyze(f)
-        assert any(r.cwe_id == "CWE-502" and r.severity == Severity.CRITICAL for r in risks)
-
-
-# ─── Safe Code ──────────────────────────────────────────────────
-
-class TestSafeCode:
-    def test_safe_c_code(self, analyzer):
-        """Safe C code should produce no critical/high risks"""
-        code = '''
-#include <stdio.h>
-int main() {
-    int x = 42;
-    printf("%d\\n", x);
-    return 0;
-}
-'''
-        f = CodeFile(path="safe.c", content=code, language=Language.C)
-        risks = analyzer.analyze(f)
-        critical = [r for r in risks if r.severity in (Severity.CRITICAL, Severity.HIGH)]
-        assert len(critical) == 0
-
-    def test_safe_python_code(self, analyzer):
-        """Safe Python code should produce no critical/high risks"""
-        code = '''
-def add(a, b):
-    return a + b
-
-result = add(1, 2)
-print(result)
-'''
-        f = CodeFile(path="safe.py", content=code, language=Language.PYTHON)
-        risks = analyzer.analyze(f)
-        critical = [r for r in risks if r.severity in (Severity.CRITICAL, Severity.HIGH)]
-        assert len(critical) == 0
-
-
-# ─── Test Case Files ────────────────────────────────────────────
-
-class TestTestCaseFiles:
-    def test_buffer_overflow_file(self, analyzer):
-        """buffer_overflow.c should have 2+ critical/high risks"""
-        path = Path(__file__).parent / "test_cases" / "buffer_overflow.c"
-        f = CodeFile.from_path(path)
-        risks = analyzer.analyze(f)
-        high_risks = [r for r in risks if r.severity in (Severity.CRITICAL, Severity.HIGH)]
-        assert len(high_risks) >= 2
-
-    def test_command_injection_file(self, analyzer):
-        """command_injection.c should have 2+ high risks"""
-        path = Path(__file__).parent / "test_cases" / "command_injection.c"
-        f = CodeFile.from_path(path)
-        risks = analyzer.analyze(f)
-        high_risks = [r for r in risks if r.severity in (Severity.CRITICAL, Severity.HIGH)]
-        assert len(high_risks) >= 2
-
-    def test_code_injection_file(self, analyzer):
-        """code_injection.py should have 3+ critical risks"""
-        path = Path(__file__).parent / "test_cases" / "code_injection.py"
-        f = CodeFile.from_path(path)
-        risks = analyzer.analyze(f)
-        critical = [r for r in risks if r.severity == Severity.CRITICAL]
-        assert len(critical) >= 3
-
-    def test_memory_issues_file(self, analyzer):
-        """memory_issues.c should detect malloc and double free"""
-        path = Path(__file__).parent / "test_cases" / "memory_issues.c"
-        f = CodeFile.from_path(path)
-        risks = analyzer.analyze(f)
-        assert len(risks) >= 1
-
-```
-
-
-# Configuration
-
-
-## pyproject.toml
+# pyproject.toml
 
 ```
 [project]
@@ -5994,7 +5778,7 @@ testpaths = ["tests"]
 ```
 
 
-## .env.example
+# .env.example
 
 ```
 # CodeRisk Agent - Environment Configuration
@@ -6020,118 +5804,3 @@ SEMGREP_RULES=p/default
 
 ```
 
-
-## .gitignore
-
-```
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.egg-info/
-dist/
-build/
-.eggs/
-
-# Virtual environments
-.venv/
-venv/
-env/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Environment
-.env
-.env.local
-
-# Models
-models/*.gguf
-models/*.bin
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-logs/
-
-# Source dumps (versioned snapshots)
-CodeRisk-Agent-*-Source.md
-CodeRisk-Agent-*-源码.md
-CodeRisk-Agent-源码.md
-
-# Coverage
-htmlcov/
-.coverage
-
-```
-
-
-# Scripts
-
-## run_demo.sh
-
-```bash
-#!/bin/bash
-# scripts/run_demo.sh - CodeRisk Agent Demo Script
-# For AMD AI DevMaster Hackathon Track 2
-
-set -e
-
-echo "=========================================="
-echo "  CodeRisk Agent - Demo"
-echo "  AMD AI DevMaster Hackathon Track 2"
-echo "=========================================="
-echo ""
-
-# 1. Environment Check
-echo "[1/5] Environment Check"
-echo "----------------------------------------"
-if command -v rocm-smi &> /dev/null; then
-    echo "ROCm detected:"
-    rocm-smi --showproductname 2>/dev/null | head -3 || echo "  (rocm-smi available but limited in container)"
-else
-    echo "ROCm not available (CPU-only mode)"
-fi
-echo "Python: $(python3 --version)"
-echo ""
-
-# 2. Quick Demo (Static Analysis)
-echo "[2/5] Static Analysis Demo (no LLM)"
-echo "----------------------------------------"
-cd "$(dirname "$0")/.."
-python3 main.py demo
-echo ""
-
-# 3. Full Analysis on Test Cases
-echo "[3/5] Full Analysis on Test Cases"
-echo "----------------------------------------"
-python3 main.py analyze tests/test_cases/ --no-ai --output terminal
-echo ""
-
-# 4. Version Info
-echo "[4/5] System Info"
-echo "----------------------------------------"
-python3 main.py info
-echo ""
-
-# 5. Summary
-echo "[5/5] Summary"
-echo "----------------------------------------"
-echo "CodeRisk Agent features:"
-echo "  - Agent 1: Static Analyzer (regex + Tree-sitter)"
-echo "  - Agent 2: Semantic Analyzer (LLM-driven)"
-echo "  - Agent 3: Deep Verifier (triple cross-validation + memory)"
-echo "  - Agent 4: Report Generator (JSON/Markdown/Rich)"
-echo "  - Orchestrator: State machine pipeline"
-echo "  - Memory Layer: Learn from history"
-echo "  - CVE Client: NVD database lookup"
-echo ""
-echo "Demo complete!"
-
-```
