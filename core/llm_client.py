@@ -344,10 +344,12 @@ class LLMClient:
     @staticmethod
     def _escape_content(content: str) -> str:
         "Escape special tokens to prevent prompt injection."
-        return content.replace("<im_start>", "<|im_start_ESCAPED|>")\
-                      .replace("</im_end>", "<|im_end_ESCAPED|>")\
-                      .replace("<|im_start|>", "<|im_start_ESCAPED|>")\
-                      .replace("<|im_end|>", "<|im_end_ESCAPED|>")
+        return content.replace('<im_start>', '<|im_start_ESCAPED>') \
+                      .replace('<im_end>', '<|im_end_ESCAPED>') \
+                      .replace('</im_end>', '<|im_end_ESCAPED>') \
+                      .replace('<im|start>', '<|im_start_ESCAPED>') \
+                      .replace('<im|end>', '<|im_end_ESCAPED>') \
+                      .replace('</im|end>', '<|im_end_ESCAPED>')
 
     @staticmethod
     def _messages_to_prompt(messages: list[dict[str, str]]) -> str:
