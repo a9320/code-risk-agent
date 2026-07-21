@@ -205,21 +205,21 @@ class MemoryLayer:
         return hashlib.sha256(key.encode()).hexdigest()[:16]
 
     def _save(self):
-        """Persist memory to disk."""
+        """Persist memory to disk with proper fd-level locking."""
         os.makedirs(MEMORY_DIR, exist_ok=True)
 
         correct_data = {k: v.to_dict() for k, v in self._correct_memory.items()}
         error_data = {k: v.to_dict() for k, v in self._error_memory.items()}
 
-        with open(CORRECT_MEMORY_FILE, "w") as f:
-            fcntl.flock(f, fcntl.LOCK_EX)
-            json.dump(correct_data, f, indent=2)
-            fcntl.flock(f, fcntl.LOCK_UN)
-
-        with open(ERROR_MEMORY_FILE, "w") as f:
-            fcntl.flock(f, fcntl.LOCK_EX)
-            json.dump(error_data, f, indent=2)
-            fcntl.flock(f, fcntl.LOCK_UN)
+        for path, data in [(CORRECT_MEMORY_FILE, correct_data),
+                           (ERROR_MEMORY_FILE, error_data)]:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX)
+                os.write(fd, json.dumps(data, indent=2).encode())
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            finally:
+                os.close(fd)
 
     def _load(self):
         """Load memory from disk."""

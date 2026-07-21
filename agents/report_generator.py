@@ -257,9 +257,7 @@ class ReportGenerator:
             cve_ids = _extract_cve_ids(risk.description)
             sarif_result = {
                 "ruleId": risk.cwe_id or "CWE-000",
-                "ruleIndex": next(
-                    (i for i, r in enumerate(rules) if r["id"] == risk.cwe_id), 0
-                ),
+                "ruleIndex": rule_index_map.get(risk.cwe_id, 0),
                 "level": level_map.get(risk.severity, "warning"),
                 "message": {
                     "text": f"{risk.title}: {risk.description[:300]}"

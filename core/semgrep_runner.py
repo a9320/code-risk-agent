@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 import os
-import shlex
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -41,7 +40,7 @@ def run_semgrep(
     """Run Semgrep on a single file, return raw results."""
     try:
         result = subprocess.run(
-            ["semgrep", "scan", "--json", f"--config={shlex.quote(config)}", str(file_path)],
+            ["semgrep", "scan", "--json", f"--config={config}", str(file_path)],
             capture_output=True,
             text=True,
             timeout=timeout,

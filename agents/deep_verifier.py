@@ -175,8 +175,9 @@ class DeepVerifier:
 
         # Strategy 2: Knowledge base cross-validation (CVE lookup)
         if risk.cwe_id and risk.cwe_id.startswith("CWE-"):
-            confirmations += 1
-            reasons.append(f"known CWE: {risk.cwe_id}")
+            # Don't auto-confirm: CWE ID from Agent 1 is not cross-validation.
+            # Only confirm if CVE data exists (real knowledge-base validation).
+            reasons.append(f"CWE tagged: {risk.cwe_id}")
 
             # Active CVE lookup for critical/high risks
             if risk.severity in (Severity.CRITICAL, Severity.HIGH):

@@ -268,7 +268,7 @@ class LLMClient:
                 if schema is not None:
                     # Validate against Pydantic schema
                     validated = schema.model_validate(parsed)
-                    return validated.model_dump()
+                    return validated.model_dump(exclude_none=True)
                 return parsed
             except Exception as e:
                 last_err = e

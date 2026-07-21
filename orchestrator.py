@@ -40,15 +40,6 @@ MAX_STATIC_WORKERS = 4   # CPU-bound parallelism
 MAX_SEMANTIC_WORKERS = 2  # GPU-bound, limited concurrency
 
 
-VALID_TRANSITIONS = {
-    State.INIT: {State.PARSE, State.ERROR},
-    State.PARSE: {State.ANALYZE, State.ERROR},
-    State.ANALYZE: {State.VERIFY, State.ERROR},
-    State.VERIFY: {State.REPORT, State.ERROR},
-    State.REPORT: {State.DONE, State.ERROR},
-}
-
-
 class State(str, Enum):
     INIT = "init"
     PARSE = "parse"
@@ -57,6 +48,15 @@ class State(str, Enum):
     REPORT = "report"
     DONE = "done"
     ERROR = "error"
+
+
+VALID_TRANSITIONS = {
+    State.INIT: {State.PARSE, State.ERROR},
+    State.PARSE: {State.ANALYZE, State.ERROR},
+    State.ANALYZE: {State.VERIFY, State.ERROR},
+    State.VERIFY: {State.REPORT, State.ERROR},
+    State.REPORT: {State.DONE, State.ERROR},
+}
 
 
 class Orchestrator:

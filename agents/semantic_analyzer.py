@@ -128,6 +128,17 @@ Please validate each risk and identify any missed vulnerabilities."""
                     "description": risk.description + " [LLM: likely false positive]",
                 })
             else:
+                # Map LLM confidence to enum
+                llm_conf = v.get("confidence", 0.5)
+                if llm_conf >= 0.8:
+                    new_conf = Confidence.HIGH
+                elif llm_conf >= 0.5:
+                    new_conf = Confidence.MEDIUM
+                else:
+                    new_conf = Confidence.LOW
+                if new_conf != risk.confidence:
+                    risk = risk.model_copy(update={"confidence": new_conf})
+
                 # Enrich with attack scenario
                 scenario = v.get("attack_scenario", "")
                 impact = v.get("impact", "")
