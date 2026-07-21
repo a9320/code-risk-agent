@@ -27,11 +27,19 @@ OSV_TIMEOUT = 10
 # ─── OSV API Client ─────────────────────────────────────────────
 
 
+_osv_client: httpx.Client = None
+
+def _get_osv_client() -> httpx.Client:
+    global _osv_client
+    if _osv_client is None:
+        _osv_client = httpx.Client(timeout=OSV_TIMEOUT)
+    return _osv_client
+
 @retry(max_retries=2, exceptions=(httpx.RequestError, httpx.TimeoutException))
 def _query_osv(package_name: str, version: str, ecosystem: str = "PyPI") -> list[dict]:
     """Query OSV API for vulnerabilities of a specific package version."""
     try:
-        client = httpx.Client(timeout=OSV_TIMEOUT)
+        client = _get_osv_client()
         resp = client.post(
             OSV_API_URL,
             json={

@@ -171,14 +171,13 @@ Please validate each risk and identify any missed vulnerabilities."""
                 merged.append(risk)
 
         # Add new risks found by LLM
-        counter = len(merged)
+        import uuid as _uuid
         for nr in new_risks_raw:
-            counter += 1
             sev_str = nr.get("severity", "medium").lower()
             sev = Severity(sev_str) if sev_str in [s.value for s in Severity] else Severity.MEDIUM
 
             merged.append(Risk(
-                id=f"RISK-{counter:03d}",
+                id=f"RISK-{_uuid.uuid4().hex[:8].upper()}",
                 title=nr.get("title", "LLM-detected risk"),
                 description=nr.get("description", ""),
                 severity=sev,

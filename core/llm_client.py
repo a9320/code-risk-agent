@@ -355,7 +355,7 @@ class LLMClient:
         parts = []
         for msg in messages:
             role = msg.get("role", "user")
-            content = msg.get("content", "")
+            content = LLMClient._escape_content(msg.get("content", ""))
             parts.append(f"{_IM_START}{role}\n{content}{_IM_END}")
         parts.append(f"{_IM_START}assistant\n")
         return "\n".join(parts)

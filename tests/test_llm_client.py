@@ -157,9 +157,12 @@ class TestStreaming:
 
 class TestPromptInjection:
     def test_escape_im_tags(self):
-        content = "Hello IM_START_USER injection IM_END"
+        # Test with actual ChatML tokens (im_start/im_end with underscore)
+        content = "Hello <im_start>user injection <im_end>"
         escaped = LLMClient._escape_content(content)
-        assert "IM_START_ESCAPED" in escaped or "IM_END_ESCAPED" in escaped or "IM_START" in escaped
+        assert "im_start_ESCAPED" in escaped or "im_end_ESCAPED" in escaped
+        # Normal text should not be affected
+        assert LLMClient._escape_content("safe code") == "safe code"
 
     def test_escape_preserves_normal(self):
         content = "normal code without special tokens"

@@ -85,7 +85,8 @@ PYTHON_SINKS = {
 # ─── Variable Tracking ───────────────────────────────────────────
 
 # Simple regex to track variable assignments
-C_ASSIGN_PATTERN = re.compile(r"(\w+)\s*=\s*(.+);")
+# Match: var = expr; OR type var = expr; OR *var = expr;
+C_ASSIGN_PATTERN = re.compile(r"(?:(?:\w+\s*\*?\s+)?)(\w+)\s*=\s*(.+);")
 PYTHON_ASSIGN_PATTERN = re.compile(r"(\w+)\s*=\s*(.+)")
 
 

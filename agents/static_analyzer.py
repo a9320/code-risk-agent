@@ -312,7 +312,7 @@ class StaticAnalyzer:
             # 检查模式匹配
             for pat in C_VULNERABLE_PATTERNS:
                 if re.search(pat["pattern"], line):
-                    # 简化：malloc 后 3 行内无 NULL 检查
+                    # malloc: check 3 lines after for NULL check
                     if pat.get("check_null"):
                         context = "\n".join(lines[i:i+3])
                         if "NULL" not in context and "null" not in context:
@@ -331,6 +331,30 @@ class StaticAnalyzer:
                                 reasoning=f"匹配模式: {pat['pattern']}",
                                 suggestion=pat["fix"],
                             ))
+                    # double free: only flag if same variable freed 2+ times
+                    if pat.get("check_double_free"):
+                        import re as _re
+                        m = _re.search(r"free\s*\((\w+)\)", line)
+                        if m:
+                            var = m.group(1)
+                            # count how many times this var is freed
+                            free_count = sum(1 for ln in lines if _re.search(rf"free\s*\({var}\)", ln))
+                            if free_count >= 2:
+                                risks.append(self._make_risk(
+                                    title=pat["title"],
+                                    description=f"{pat['desc']} (变量 {var} 被释放 {free_count} 次)",
+                                    severity=pat["severity"],
+                                    confidence=Confidence.HIGH,
+                                    cwe_id=pat["cwe"],
+                                    language=Language.C,
+                                    file_path=code_file.path,
+                                    line_start=i,
+                                    line_end=i,
+                                    snippet=line.strip(),
+                                    source="pattern_match",
+                                    reasoning=f"变量 {var} 存在 {free_count} 次 free() 调用",
+                                    suggestion=pat["fix"],
+                                ))
 
             # 检查新增模式（参考 vigolium/pentest-ai）
             for pat in C_NEW_PATTERNS:

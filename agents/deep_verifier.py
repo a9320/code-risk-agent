@@ -94,6 +94,17 @@ class DeepVerifier:
 
         console.print("[bold cyan]  Agent 3: Deep verification...[/]")
 
+        # Pre-fetch CVE data for all unique CWEs (batch, avoid N+1 queries)
+        critical_cwes = {
+            r.cwe_id for r in risks
+            if r.cwe_id and r.severity in (Severity.CRITICAL, Severity.HIGH)
+        }
+        for cwe in critical_cwes:
+            try:
+                self.cve.get_cve_summary(cwe)
+            except Exception:
+                pass  # best-effort
+
         verified_risks = []
         suppressed = 0
 
@@ -268,15 +279,14 @@ Please verify these risks and find any missed vulnerabilities."""
 
         missed_raw = response.get("missed_risks", [])
         missed_risks = []
-        counter = len(existing_risks)
+        import uuid as _uuid
 
         for mr in missed_raw:
-            counter += 1
             sev_str = mr.get("severity", "medium").lower()
             sev = Severity(sev_str) if sev_str in [s.value for s in Severity] else Severity.MEDIUM
 
             missed_risks.append(Risk(
-                id=f"RISK-{counter:03d}",
+                id=f"RISK-{_uuid.uuid4().hex[:8].upper()}",
                 title=mr.get("title", "Missed risk (Agent 3 reflection)"),
                 description=mr.get("description", ""),
                 severity=sev,

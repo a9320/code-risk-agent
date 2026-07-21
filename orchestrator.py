@@ -323,6 +323,9 @@ class Orchestrator:
         self.state = State.DONE
         console.print(f"\n[green]  Analysis complete. {result.total_risks} risks found in {elapsed_ms}ms.[/]")
 
+        # Cleanup resources
+        self.cve.close()
+
         return result
 
     def _validate_files(self, files: list[CodeFile]) -> list[CodeFile]:
