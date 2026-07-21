@@ -70,8 +70,8 @@ MAX_RETRIES = 3
 RETRY_BASE_DELAY = 1.0
 
 # Qwen2.5 ChatML special tokens
-_IM_START = "<im|start>"
-_IM_END = "</im|end>"
+_IM_START = "<im_start>"
+_IM_END = "</im_end>"
 _ENDOFTEXT = "<|endoftext|>"
 
 
@@ -344,8 +344,8 @@ class LLMClient:
     @staticmethod
     def _escape_content(content: str) -> str:
         "Escape special tokens to prevent prompt injection."
-        return content.replace("<im|start>", "<|im_start_ESCAPED|>")\
-                      .replace("</im|end>", "<|im_end_ESCAPED|>")\
+        return content.replace("<im_start>", "<|im_start_ESCAPED|>")\
+                      .replace("</im_end>", "<|im_end_ESCAPED|>")\
                       .replace("<|im_start|>", "<|im_start_ESCAPED|>")\
                       .replace("<|im_end|>", "<|im_end_ESCAPED|>")
 

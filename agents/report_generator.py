@@ -252,6 +252,7 @@ class ReportGenerator:
                 })
 
         # Build results
+        rule_index_map = {r["id"]: i for i, r in enumerate(rules)}
         sarif_results = []
         for risk in result.risks:
             cve_ids = _extract_cve_ids(risk.description)
