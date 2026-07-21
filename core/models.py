@@ -185,3 +185,61 @@ def _detect_language(path: Path) -> Language:
         ".py": Language.PYTHON,
     }
     return suffix_map.get(path.suffix, Language.UNKNOWN)
+
+
+# ─── LLM 结构化输出 Schema ──────────────────────────────────────
+
+class ValidatedRisk(BaseModel):
+    """LLM 对已有风险的验证结果"""
+    id: str = Field(description="风险 ID，如 RISK-001")
+    is_true_positive: bool = Field(default=True)
+    reasoning: str = Field(default="")
+    attack_scenario: str = Field(default="")
+    impact: str = Field(default="")
+    notes: str = Field(default="")
+    adjusted_severity: Optional[str] = Field(default=None)
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
+class NewRisk(BaseModel):
+    """LLM 发现的新风险"""
+    title: str
+    description: str = Field(default="")
+    severity: str = Field(default="medium")
+    cwe_id: Optional[str] = None
+    line_start: int = 0
+    line_end: int = 0
+    attack_scenario: str = Field(default="")
+    suggestion: str = Field(default="Review this code section.")
+
+
+class SemanticResponse(BaseModel):
+    """SemanticAnalyzer LLM 输出的 Schema"""
+    validated_risks: list[ValidatedRisk] = Field(default_factory=list)
+    new_risks: list[NewRisk] = Field(default_factory=list)
+
+
+class VerifiedRisk(BaseModel):
+    """DeepVerifier 对风险的验证结果"""
+    id: str
+    confirmed: bool = Field(default=True)
+    confidence_reason: str = Field(default="")
+    false_positive_likelihood: str = Field(default="medium")
+
+
+class MissedRisk(BaseModel):
+    """DeepVerifier 发现的遗漏风险"""
+    title: str
+    description: str = Field(default="")
+    severity: str = Field(default="medium")
+    cwe_id: Optional[str] = None
+    line_start: int = 0
+    line_end: int = 0
+    reasoning: str = Field(default="")
+    suggestion: str = Field(default="Review this code section.")
+
+
+class ReflectionResponse(BaseModel):
+    """DeepVerifier 自省循环的 LLM 输出 Schema"""
+    verified_risks: list[VerifiedRisk] = Field(default_factory=list)
+    missed_risks: list[MissedRisk] = Field(default_factory=list)

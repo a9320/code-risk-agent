@@ -17,7 +17,9 @@ from core.models import (
     Confidence,
     Evidence,
     Language,
+    ReflectionResponse,
     Risk,
+    SemanticResponse,
     Severity,
 )
 
@@ -67,6 +69,7 @@ class SemanticAnalyzer:
                     {"role": "user", "content": prompt},
                 ],
                 max_tokens=4096,
+                schema=SemanticResponse,
             )
         except Exception as e:
             console.print(f"[yellow]Semantic analysis failed: {e}[/]")
@@ -220,6 +223,7 @@ Output JSON:
                     {"role": "user", "content": prompt},
                 ],
                 max_tokens=2048,
+                schema=SemanticResponse,
             )
             return self._merge_results([], response, code_file)
         except Exception as e:

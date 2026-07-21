@@ -137,8 +137,15 @@ class LLMClient:
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
         response_format: Optional[dict] = None,
+        stream: bool = False,
+        on_token: Optional[callable] = None,
     ) -> str:
-        """Send chat request with auto-retry."""
+        """Send chat request with auto-retry.
+
+        Args:
+            stream: Enable streaming for HTTP backends.
+            on_token: Callback for each token when streaming (token: str) -> None.
+        """
         temp = temperature if temperature is not None else self.config.temperature
         tokens = max_tokens if max_tokens is not None else self.config.max_tokens
 
@@ -147,6 +154,8 @@ class LLMClient:
             try:
                 if self.config.backend == LLMBackend.LOCAL_LLAMA_CPP:
                     return self._chat_local(messages, temp, tokens)
+                elif stream:
+                    return self._chat_stream(messages, temp, tokens, on_token)
                 else:
                     return self._chat_http(messages, temp, tokens, response_format)
             except Exception as e:
@@ -237,21 +246,91 @@ class LLMClient:
         messages: list[dict[str, str]],
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
+        schema: Optional[type] = None,
     ) -> dict:
-        """Send chat request, parse JSON with auto-retry on parse failure."""
+        """Send chat request, parse JSON with auto-retry and optional schema validation.
+
+        Args:
+            schema: Pydantic model class for output validation.
+                    If provided, validates the parsed JSON against the schema.
+        """
         last_err = None
         msgs = list(messages)
         for attempt in range(3):
-            raw = self.chat(msgs, temperature, max_tokens)
+            # Request JSON mode for HTTP backends
+            response_format = None
+            if self.config.backend in (LLMBackend.SHARED_API, LLMBackend.LOCAL_HTTP):
+                response_format = {"type": "json_object"}
+
+            raw = self.chat(msgs, temperature, max_tokens, response_format=response_format)
             try:
-                return _extract_json(raw)
-            except (ValueError, KeyError) as e:
+                parsed = _extract_json(raw)
+                if schema is not None:
+                    # Validate against Pydantic schema
+                    validated = schema.model_validate(parsed)
+                    return validated.model_dump()
+                return parsed
+            except Exception as e:
                 last_err = e
                 if attempt < 2:
+                    schema_hint = ""
+                    if schema is not None:
+                        import json as _json
+                        schema_hint = f" Expected schema: {_json.dumps(schema.model_json_schema(), indent=2)}"
                     msgs = list(messages) + [{"role": "user", "content":
-                        f"Your response was not valid JSON. Error: {e}. Respond with valid JSON only."}]
+                        f"Your response was not valid JSON. Error: {e}.{schema_hint} Respond with valid JSON only."}]
                     console.print(f"[yellow]JSON parse failed, retry {attempt+1}/3[/]")
         raise ValueError(f"Failed to get valid JSON after 3 attempts: {last_err}")
+
+    def _chat_stream(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+        on_token: Optional[callable] = None,
+    ) -> str:
+        """Streaming HTTP API call (shared API or llama-server)."""
+        payload = {
+            "model": self.config.model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": True,
+        }
+
+        url = f"{self.config.api_url}/chat/completions"
+        headers = {"Content-Type": "application/json"}
+        if self.config.api_key:
+            headers["Authorization"] = f"Bearer {self.config.api_key}"
+
+        start = time.monotonic()
+        full_content = ""
+
+        with self._client.stream("POST", url, json=payload, headers=headers) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                if not line or not line.startswith("data: "):
+                    continue
+                data_str = line[6:]
+                if data_str.strip() == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data_str)
+                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+                    token = delta.get("content", "")
+                    if token:
+                        full_content += token
+                        if on_token:
+                            on_token(token)
+                except json.JSONDecodeError:
+                    continue
+
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        self._request_count += 1
+        console.print(
+            f"[dim]LLM [stream] {elapsed_ms}ms | chars: {len(full_content)} | total_reqs: {self._request_count}[/]"
+        )
+        return full_content
 
     @property
     def stats(self) -> dict:

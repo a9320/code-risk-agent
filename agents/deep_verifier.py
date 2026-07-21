@@ -22,6 +22,7 @@ from core.models import (
     CodeFile,
     Confidence,
     Evidence,
+    ReflectionResponse,
     Risk,
     Severity,
 )
@@ -258,6 +259,7 @@ Please verify these risks and find any missed vulnerabilities."""
                     {"role": "user", "content": prompt},
                 ],
                 max_tokens=4096,
+                schema=ReflectionResponse,
             )
         except Exception as e:
             console.print(f"[dim]Reflection failed: {e}[/]")

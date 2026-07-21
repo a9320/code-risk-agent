@@ -6,7 +6,10 @@ Used by DeepVerifier for knowledge-base cross-validation.
 
 from __future__ import annotations
 
+import json
+import os
 import time
+from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -17,16 +20,27 @@ console = Console()
 NVD_API_BASE = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 REQUEST_TIMEOUT = 15
 RATE_LIMIT_DELAY = 1.0  # NVD rate limit: 5 requests/30s without API key
+CACHE_DIR = Path(os.getenv("CODERISK_CACHE_DIR", str(Path.home() / ".coderisk" / "cache")))
+CACHE_FILE = CACHE_DIR / "cve_cache.json"
+CACHE_TTL_SECONDS = 86400  # 24 hours
 
 
 class CVEClient:
-    """Query NVD for CVE information by CWE ID or keyword."""
+    """Query NVD for CVE information by CWE ID or keyword.
+
+    Features:
+    - In-memory cache for fast access
+    - Persistent disk cache (survives restarts)
+    - TTL-based expiry (24h default)
+    """
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key
         self._client = httpx.Client(timeout=REQUEST_TIMEOUT)
-        self._cache: dict[str, list[dict]] = {}  # Simple in-memory cache
+        self._cache: dict[str, dict] = {}  # key -> {data, timestamp}
         self._last_request_time = 0.0
+        self._dirty = False
+        self._load_disk_cache()
 
     def query_by_cwe(
         self,
@@ -42,10 +56,11 @@ class CVEClient:
         Returns:
             List of CVE summaries with id, description, severity, references
         """
-        # Check cache
+        # Check cache (memory + disk)
         cache_key = f"{cwe_id}:{max_results}"
-        if cache_key in self._cache:
-            return self._cache[cache_key]
+        cached = self._get_cached(cache_key)
+        if cached is not None:
+            return cached
 
         # Rate limiting
         self._rate_limit()
@@ -107,8 +122,8 @@ class CVEClient:
                 "references": references,
             })
 
-        # Cache results
-        self._cache[cache_key] = results
+        # Cache results (memory + mark for disk flush)
+        self._set_cache(cache_key, results)
         return results
 
     def has_known_exploits(self, cwe_id: str) -> bool:
@@ -134,6 +149,53 @@ class CVEClient:
             )
         return " | ".join(summaries)
 
+    def _get_cached(self, key: str) -> Optional[list[dict]]:
+        """Get from cache if not expired."""
+        entry = self._cache.get(key)
+        if entry is None:
+            return None
+        if time.time() - entry["timestamp"] > CACHE_TTL_SECONDS:
+            del self._cache[key]
+            self._dirty = True
+            return None
+        return entry["data"]
+
+    def _set_cache(self, key: str, data: list[dict]):
+        """Set cache entry and flush to disk."""
+        self._cache[key] = {"data": data, "timestamp": time.time()}
+        self._dirty = True
+        self._flush_disk_cache()
+
+    def _load_disk_cache(self):
+        """Load cache from disk."""
+        try:
+            if CACHE_FILE.exists():
+                raw = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
+                # Filter expired entries
+                now = time.time()
+                self._cache = {
+                    k: v for k, v in raw.items()
+                    if now - v.get("timestamp", 0) < CACHE_TTL_SECONDS
+                }
+                console.print(f"[dim]CVE cache loaded: {len(self._cache)} entries[/]")
+        except Exception as e:
+            console.print(f"[dim]CVE cache load failed (will rebuild): {e}[/]")
+            self._cache = {}
+
+    def _flush_disk_cache(self):
+        """Persist cache to disk."""
+        if not self._dirty:
+            return
+        try:
+            CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            CACHE_FILE.write_text(
+                json.dumps(self._cache, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            self._dirty = False
+        except Exception as e:
+            console.print(f"[dim]CVE cache flush failed: {e}[/]")
+
     def _rate_limit(self):
         """Respect NVD rate limits."""
         elapsed = time.monotonic() - self._last_request_time
@@ -142,6 +204,7 @@ class CVEClient:
         self._last_request_time = time.monotonic()
 
     def close(self):
+        self._flush_disk_cache()
         self._client.close()
 
     def __enter__(self):
