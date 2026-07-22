@@ -178,13 +178,13 @@ CodeRisk Agent is optimized for AMD Radeon GPUs via ROCm/HIP.
 ### Performance
 
 > All performance data was measured on our Radeon Cloud instance
-> (RX 7900 XTX, ROCm 7.2.4, HIP backend).
+> (Radeon Pro W7900, 48GB VRAM, ROCm 7.2.4, HIP backend).
 
 | Metric | CPU | AMD GPU (HIP) | Speedup |
 |--------|-----|---------------|---------|
 | Token generation | 6.8 t/s | 105 t/s | **15.4×** |
-| Prompt processing | — | 628 t/s | — |
-| VRAM usage | — | 24% (~5 GB) | — |
+| Prompt processing | ~40 t/s | 628 t/s | **15.7×** |
+| VRAM usage | — | 41% (~19.6 GB / 48 GB) | — |
 
 ### Build llama.cpp with ROCm
 
@@ -197,10 +197,10 @@ cmake --build build --config Release -j$(nproc)
 
 # Download Qwen2.5-Coder-32B-Instruct GGUF
 huggingface-cli download Qwen/Qwen2.5-Coder-32B-Instruct-GGUF \
-  qwen2.5-coder-7b-instruct-q4_k_m.gguf --local-dir models/
+  qwen2.5-coder-32b-instruct-q4_k_m.gguf --local-dir models/
 
 # Run inference
-./build/bin/llama-server -m models/qwen2.5-coder-7b-instruct-q4_k_m.gguf -ngl 999 -fa 1
+./build/bin/llama-server -m models/qwen2.5-coder-32b-instruct-q4_k_m.gguf -ngl 999 -fa 1
 ```
 
 > **Key discovery:** The HIP backend flag changed from `GGML_HIPBLAS=ON` (2024-2025) to `GGML_HIP=ON` (2026). This was the root cause of initial GPU inference failures.
@@ -253,7 +253,7 @@ pytest
 pytest --cov=. --cov-report=html
 ```
 
-13 unit tests covering buffer overflow, command injection, code injection, deserialization, and safe code detection.
+51 unit tests covering buffer overflow, command injection, code injection, deserialization, and safe code detection.
 
 ---
 
@@ -270,7 +270,7 @@ pytest --cov=. --cov-report=html
 | Memory | JSON-based dual memory system |
 | Output Formats | JSON, Markdown, SARIF 2.1.0, Rich terminal |
 | CLI | Rich terminal UI |
-| GPU | AMD Radeon RX 7900 XTX + ROCm 7.2.4 |
+| GPU | AMD Radeon Pro W7900 (48GB) + ROCm 7.2.4 |
 
 ---
 

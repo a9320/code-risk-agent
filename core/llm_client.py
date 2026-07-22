@@ -46,7 +46,7 @@ DEFAULT_CONFIGS = {
     LLMBackend.SHARED_API: LLMConfig(
         backend=LLMBackend.SHARED_API,
         api_url="https://developer.amd.com.cn/radeon/api/v1",
-        model="DeepSeek-V4-Flash",
+        model="Qwen3.6-35B-A3B",
         temperature=0.1,
         max_tokens=8192,
     ),
