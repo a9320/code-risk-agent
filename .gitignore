@@ -1,44 +1,25 @@
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.egg-info/
-dist/
-build/
-.eggs/
-
-# Virtual environments
+*.pyc
+*.pyo
 .venv/
 venv/
-env/
 
 # IDE
 .vscode/
 .idea/
-*.swp
-*.swo
-
-# Environment
-.env
-.env.local
-
-# Models
-models/*.gguf
-models/*.bin
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
-logs/
+# Demo assets (not for source repo)
+demo-audio/
+*.png
+*.mp3
+*.mp4
 
-# Source dumps (versioned snapshots)
-CodeRisk-Agent-*-Source.md
-CodeRisk-Agent-*-源码.md
-CodeRisk-Agent-源码.md
-
-# Coverage
-htmlcov/
-.coverage
+# Env
+.env
+.env.*
+!.env.example
