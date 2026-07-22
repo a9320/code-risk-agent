@@ -46,7 +46,7 @@ DEFAULT_CONFIGS = {
     LLMBackend.SHARED_API: LLMConfig(
         backend=LLMBackend.SHARED_API,
         api_url="https://developer.amd.com.cn/radeon/api/v1",
-        model="Qwen/Qwen3.6-35B-A3B",
+        model="DeepSeek-V4-Flash",
         temperature=0.1,
         max_tokens=8192,
     ),
@@ -79,11 +79,22 @@ class LLMClient:
     """Unified LLM client with retry support."""
 
     def __init__(self, config: Optional[LLMConfig] = None, backend: Optional[LLMBackend] = None):
+        import os
         if config:
             self.config = config
         else:
-            b = backend or LLMBackend.LOCAL_LLAMA_CPP
-            self.config = DEFAULT_CONFIGS[b]
+            env_backend = os.getenv("LLM_BACKEND", "")
+            if env_backend:
+                try:
+                    b = LLMBackend(env_backend)
+                except ValueError:
+                    b = backend or LLMBackend.LOCAL_LLAMA_CPP
+            else:
+                b = backend or LLMBackend.LOCAL_LLAMA_CPP
+            self.config = DEFAULT_CONFIGS[b].model_copy()
+            # Read API key from environment
+            if api_key := os.getenv("LLM_API_KEY", ""):
+                self.config.api_key = api_key
 
         self._client: Optional[httpx.Client] = None
         self._local_llm = None
