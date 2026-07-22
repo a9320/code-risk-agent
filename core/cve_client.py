@@ -62,6 +62,15 @@ class CVEClient:
         if cached is not None:
             return cached
 
+        # Sanitize CWE ID: extract just "CWE-xxx" from strings like "CWE-676: Use of..."
+        import re
+        cwe_match = re.match(r'(CWE-\d+)', cwe_id)
+        if cwe_match:
+            cwe_id = cwe_match.group(1)
+        else:
+            console.print(f"[dim]Invalid CWE ID format: {cwe_id}[/]")
+            return []
+
         # Rate limiting
         self._rate_limit()
 
