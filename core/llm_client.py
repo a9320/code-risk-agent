@@ -80,13 +80,16 @@ class LLMClient:
                 try:
                     b = LLMBackend(env_backend)
                 except ValueError:
+                    console.print(
+                        f"[yellow]Invalid LLM_BACKEND '{env_backend}', "
+                        f"falling back to local_llama_cpp[/]"
+                    )
                     b = backend or LLMBackend.LOCAL_LLAMA_CPP
             else:
                 b = backend or LLMBackend.LOCAL_LLAMA_CPP
             self.config = DEFAULT_CONFIGS[b].model_copy()
-            # Read API key from environment
-            if api_key := os.getenv("LLM_API_KEY", ""):
-                self.config.api_key = api_key
+            # API key only needed for authenticated local_http (optional)
+            # No cloud API keys required for local inference
 
         self._client: Optional[httpx.Client] = None
         self._local_llm = None
@@ -260,10 +263,9 @@ class LLMClient:
         last_err = None
         msgs = list(messages)
         for attempt in range(3):
-            # Request JSON mode for HTTP backends
+            # response_format not supported by llama-server
+            # We rely on prompt engineering and JSON extraction instead
             response_format = None
-            if self.config.backend == LLMBackend.LOCAL_HTTP:
-                response_format = {"type": "json_object"}
 
             raw = self.chat(msgs, temperature, max_tokens, response_format=response_format)
             try:
