@@ -1,11 +1,10 @@
 """CodeRisk Agent - LLM Client
 
-Three backends:
-1. Shared API (Radeon Cloud HTTP)
-2. Local llama-server (HTTP)
-3. Local llama-cpp-python (direct GGUF load)
+Two local backends:
+1. Local llama-server (HTTP)
+2. Local llama-cpp-python (direct GGUF load)
 
-Unified interface with auto-retry.
+Unified interface with auto-retry. No cloud API calls.
 """
 
 from __future__ import annotations
@@ -43,13 +42,6 @@ def find_gguf_model() -> str:
 
 
 DEFAULT_CONFIGS = {
-    LLMBackend.SHARED_API: LLMConfig(
-        backend=LLMBackend.SHARED_API,
-        api_url="https://developer.amd.com.cn/radeon/api/v1",
-        model="Qwen3.6-35B-A3B",
-        temperature=0.1,
-        max_tokens=8192,
-    ),
     LLMBackend.LOCAL_HTTP: LLMConfig(
         backend=LLMBackend.LOCAL_HTTP,
         api_url="http://localhost:8080",
@@ -101,7 +93,7 @@ class LLMClient:
         self._request_count = 0
         self._total_tokens = 0
 
-        if self.config.backend in (LLMBackend.SHARED_API, LLMBackend.LOCAL_HTTP):
+        if self.config.backend == LLMBackend.LOCAL_HTTP:
             self._client = httpx.Client(timeout=self.config.timeout)
         elif self.config.backend == LLMBackend.LOCAL_LLAMA_CPP:
             self._init_llama_cpp()
@@ -186,7 +178,7 @@ class LLMClient:
         max_tokens: int,
         response_format: Optional[dict] = None,
     ) -> str:
-        """HTTP API call (shared API or llama-server)."""
+        """HTTP API call (local llama-server only)."""
         payload = {
             "model": self.config.model,
             "messages": messages,
@@ -270,7 +262,7 @@ class LLMClient:
         for attempt in range(3):
             # Request JSON mode for HTTP backends
             response_format = None
-            if self.config.backend in (LLMBackend.SHARED_API, LLMBackend.LOCAL_HTTP):
+            if self.config.backend == LLMBackend.LOCAL_HTTP:
                 response_format = {"type": "json_object"}
 
             raw = self.chat(msgs, temperature, max_tokens, response_format=response_format)
@@ -300,7 +292,7 @@ class LLMClient:
         max_tokens: int,
         on_token: Optional[callable] = None,
     ) -> str:
-        """Streaming HTTP API call (shared API or llama-server)."""
+        """Streaming HTTP API call (local llama-server only)."""
         payload = {
             "model": self.config.model,
             "messages": messages,
