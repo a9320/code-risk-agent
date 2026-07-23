@@ -2,7 +2,7 @@
 
 **AI-Powered Code Security Analysis — Running Entirely on Your Local AMD GPU**
 
-> Semgrep finds known patterns. CodeRisk Agent understands logic, traces attack paths, and provides exploitability evidence — all without sending your code to the cloud.
+> Semgrep finds known patterns. CodeRisk Agent understands logic, traces attack paths, and provides exploitability evidence — with LLM inference running entirely on your local AMD GPU. All vulnerability knowledge bases (CWE, CVE, OSV) are bundled locally. No external API calls at runtime.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -50,8 +50,8 @@ Static Analyzer  Semantic Analyzer
     └───┬───┘
         ↓
     Agent 3                     ← Triple cross-validation
-    Deep Verifier               (Tool + Knowledge Base + CVE)
-    (GPU + LLM + NVD API)
+    Deep Verifier               (Tool + Knowledge Base + Local CVE DB)
+    (GPU + LLM + Local DB)
         ↓
     Agent 4                     ← Structured reports
     Report Generator            (JSON + Markdown + Terminal)
@@ -68,12 +68,12 @@ Static Analyzer  Semantic Analyzer
 |-------|------|---------|--------------|
 | **Agent 1: Static Analyzer** | Pattern matching | CPU | 27 detection rules (buffer overflow, format string, double free, command injection, etc.) |
 | **Agent 2: Semantic Analyzer** | LLM-driven analysis | GPU | Validates findings, discovers missed vulnerabilities, generates attack scenarios |
-| **Agent 3: Deep Verifier** | Triple cross-validation | GPU + CPU | CWE knowledge base + live CVE/NVD lookup + self-reflection loop |
+| **Agent 3: Deep Verifier** | Triple cross-validation | GPU + CPU | CWE knowledge base + local CVE database + self-reflection loop |
 | **Agent 4: Report Generator** | Output formatting | CPU | JSON, Markdown, Rich terminal with CWE/CVE clickable links |
 
 ### What Makes It Different
 
-- **Triple Cross-Validation** — Tool confirmation + CWE knowledge base + live NVD query
+- **Triple Cross-Validation** — Tool confirmation + CWE knowledge base + local CVE database query
 - **Self-Reflection Loop** — Agent 3 asks "Did we miss anything?" and re-analyzes
 - **Dual Memory** — Correct patterns boost confidence; error patterns suppress false positives
 - **Evidence Chain** — Every risk has source code snippet, CWE classification, and reasoning
@@ -103,13 +103,26 @@ cp .env.example .env
 # Edit .env to configure LLM backend
 ```
 
-Three backends are supported:
+Two backends are supported:
 
 | Backend | Use Case | Config |
 |---------|----------|--------|
 | `local_llama_cpp` | Local GPU inference (recommended) | Set `LOCAL_MODEL_PATH` to GGUF file |
 | `local_http` | Local llama-server | Set `LOCAL_HTTP_URL` |
-| `shared_api` | Radeon Cloud shared API | Set `SHARED_API_KEY` |
+
+### Data Preparation (One-Time Setup)
+
+Build local vulnerability databases before first use:
+
+```bash
+# Download NVD CVE data → data/vuln_db.sqlite (~10-50MB)
+python scripts/download_cve_data.py --years 2023 2024 2025 2026
+
+# Download OSV dependency vulnerability data → data/osv/ (~100MB)
+python scripts/download_osv_data.py
+```
+
+> These scripts download public vulnerability data from NVD and OSV bulk feeds. No API keys required. Data is stored locally — no network calls at runtime.
 
 ### Usage
 
@@ -220,12 +233,12 @@ code-risk-agent/
 │   └── report_generator.py    # Agent 4: Output formatting
 ├── core/
 │   ├── models.py              # Data models (Risk, CodeFile, etc.)
-│   ├── llm_client.py          # Unified LLM client (3 backends)
+│   ├── llm_client.py          # Unified LLM client (2 local backends)
 │   ├── memory.py              # Dual memory system
-│   ├── cve_client.py          # NVD API client
+│   ├── cve_client.py          # Local CVE database client (SQLite)
 │   ├── semgrep_runner.py      # Semgrep integration
 │   ├── taint_analyzer.py      # Data flow tracking
-│   ├── dependency_scanner.py  # Vulnerable dependency detection (OSV + local)
+│   ├── dependency_scanner.py  # Vulnerable dependency detection (local OSV data)
 │   ├── attack_knowledge.py    # CWE/ATT&CK knowledge base
 │   └── retry.py               # Unified retry policy
 ├── tests/
@@ -247,8 +260,14 @@ code-risk-agent/
 │   ├── rocm-optimization.md
 │   ├── demo-video-script.md
 │   └── submission-checklist.md
+├── data/                          # Local vulnerability databases
+│   ├── vuln_db.sqlite             # CVE data (built by download_cve_data.py)
+│   └── osv/
+│       └── index.json             # OSV data (built by download_osv_data.py)
 ├── scripts/
-│   └── run_demo.sh
+│   ├── run_demo.sh
+│   ├── download_cve_data.py       # NVD CVE database builder
+│   └── download_osv_data.py       # OSV vulnerability data builder
 ├── pyproject.toml
 └── .env.example
 ```
@@ -277,8 +296,8 @@ pytest --cov=. --cov-report=html
 | LLM | Qwen2.5-Coder-32B-Instruct (GGUF Q4_K_M) |
 | LLM Runtime | llama.cpp with HIP backend |
 | Static Analysis | Regex + Semgrep |
-| CVE Database | NVD API (National Vulnerability Database) |
-| Dependency Scan | OSV API + local fallback |
+| CVE Database | Local SQLite (pre-downloaded from NVD) |
+| Dependency Scan | Local OSV data + fallback dictionary |
 | Memory | JSON-based dual memory system |
 | Output Formats | JSON, Markdown, SARIF 2.1.0, Rich terminal |
 | CLI | Rich terminal UI |
