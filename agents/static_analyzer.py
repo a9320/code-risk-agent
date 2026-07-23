@@ -1,9 +1,9 @@
-"""Agent 1: Tree-sitter 静态分析器
+"""Agent 1: Tree-sitter Static Analyzer
 
-职责：
-- 用 Tree-sitter 解析 AST
-- 检测 C/Python 中的危险模式
-- 输出结构化风险列表
+Responsibilities:
+- Parse AST using Tree-sitter
+- Detect dangerous patterns in C/Python code
+- Output structured risk list
 """
 
 from __future__ import annotations
@@ -26,64 +26,64 @@ from core.models import (
 
 console = Console()
 
-# ─── C 语言危险模式 ──────────────────────────────────────────────
+# ─── C Dangerous Patterns ───────────────────────────────────────
 
 C_DANGEROUS_FUNCTIONS = {
     "gets": {
         "cwe": "CWE-120",
         "severity": Severity.CRITICAL,
         "title": "Buffer Overflow via gets()",
-        "desc": "gets() 不检查边界，可导致栈缓冲区溢出",
-        "fix": "用 fgets(buf, sizeof(buf), stdin) 替代",
+        "desc": "gets() does not check buffer bounds, can cause stack buffer overflow",
+        "fix": "Replace with fgets(buf, sizeof(buf), stdin)",
     },
     "strcpy": {
         "cwe": "CWE-120",
         "severity": Severity.HIGH,
         "title": "Unbounded strcpy()",
-        "desc": "strcpy() 不检查目标缓冲区大小",
-        "fix": "用 strncpy() 或 strlcpy() 替代",
+        "desc": "strcpy() does not check destination buffer size",
+        "fix": "Replace with strncpy() or strlcpy()",
     },
     "strcat": {
         "cwe": "CWE-120",
         "severity": Severity.HIGH,
         "title": "Unbounded strcat()",
-        "desc": "strcat() 不检查目标缓冲区剩余空间",
-        "fix": "用 strncat() 或 strlcat() 替代",
+        "desc": "strcat() does not check remaining space in destination buffer",
+        "fix": "Replace with strncat() or strlcat()",
     },
     "sprintf": {
         "cwe": "CWE-134",
         "severity": Severity.HIGH,
         "title": "Format String via sprintf()",
-        "desc": "sprintf() 不检查目标缓冲区大小，且可能被格式字符串攻击",
-        "fix": "用 snprintf(buf, sizeof(buf), ...) 替代",
+        "desc": "sprintf() does not check destination buffer size and may be vulnerable to format string attacks",
+        "fix": "Replace with snprintf(buf, sizeof(buf), ...)",
     },
     "scanf": {
         "cwe": "CWE-120",
         "severity": Severity.MEDIUM,
         "title": "Unbounded scanf()",
-        "desc": "scanf(\"%s\", ...) 无长度限制",
-        "fix": "用 scanf(\"%99s\", buf) 限制长度，或用 fgets",
+        "desc": 'scanf("%s", ...) has no length limit',
+        "fix": 'Use scanf("%99s", buf) to limit length, or use fgets',
     },
     "system": {
         "cwe": "CWE-78",
         "severity": Severity.HIGH,
         "title": "OS Command Injection via system()",
-        "desc": "system() 直接执行 shell 命令，可能被注入",
-        "fix": "避免使用 system()，用 exec 系列函数替代",
+        "desc": "system() directly executes shell commands, may be injected",
+        "fix": "Avoid system(), use exec family functions instead",
     },
     "memcpy": {
         "cwe": "CWE-120",
         "severity": Severity.MEDIUM,
         "title": "Unchecked memcpy()",
-        "desc": "memcpy() 不检查目标缓冲区大小，可能导致溢出",
-        "fix": "确保目标缓冲区足够大，或用 memcpy_s() 替代",
+        "desc": "memcpy() does not check destination buffer size, may cause overflow",
+        "fix": "Ensure destination buffer is large enough, or use memcpy_s()",
     },
     "popen": {
         "cwe": "CWE-78",
         "severity": Severity.HIGH,
         "title": "Command Injection via popen()",
-        "desc": "popen() 执行 shell 命令，可能被注入",
-        "fix": "用 pipe+exec 替代，避免 shell 解释",
+        "desc": "popen() executes shell commands, may be injected",
+        "fix": "Use pipe+exec instead, avoid shell interpretation",
     },
 }
 
@@ -93,9 +93,9 @@ C_VULNERABLE_PATTERNS = [
         "check_null": True,
         "cwe": "CWE-476",
         "severity": Severity.MEDIUM,
-        "title": "malloc() 返回值未检查",
-        "desc": "malloc() 可能返回 NULL，直接使用会导致空指针解引用",
-        "fix": "检查 malloc() 返回值是否为 NULL",
+        "title": "malloc() Return Value Not Checked",
+        "desc": "malloc() may return NULL, direct use leads to null pointer dereference",
+        "fix": "Check if malloc() return value is NULL",
     },
     {
         "pattern": r"free\s*\([^)]+\)\s*;",
@@ -103,83 +103,83 @@ C_VULNERABLE_PATTERNS = [
         "cwe": "CWE-415",
         "severity": Severity.HIGH,
         "title": "Potential Double Free",
-        "desc": "free() 后指针未置 NULL，可能被重复释放",
-        "fix": "free(ptr) 后立即 ptr = NULL",
+        "desc": "Pointer not set to NULL after free(), may be freed again",
+        "fix": "Set ptr = NULL immediately after free(ptr)",
     },
 ]
 
-# ─── Python 危险模式 ────────────────────────────────────────────
+# ─── Python Dangerous Patterns ──────────────────────────────────
 
 PYTHON_DANGEROUS_CALLS = {
     "eval": {
         "cwe": "CWE-95",
         "severity": Severity.CRITICAL,
         "title": "Code Injection via eval()",
-        "desc": "eval() 执行任意代码，极度危险",
-        "fix": "用 ast.literal_eval() 替代，或重构逻辑避免动态执行",
+        "desc": "eval() executes arbitrary code, extremely dangerous",
+        "fix": "Use ast.literal_eval() or refactor logic to avoid dynamic execution",
     },
     "exec": {
         "cwe": "CWE-95",
         "severity": Severity.CRITICAL,
         "title": "Code Injection via exec()",
-        "desc": "exec() 执行任意代码",
-        "fix": "重构逻辑避免动态执行",
+        "desc": "exec() executes arbitrary code",
+        "fix": "Refactor logic to avoid dynamic execution",
     },
     "pickle.loads": {
         "cwe": "CWE-502",
         "severity": Severity.CRITICAL,
         "title": "Deserialization via pickle.loads()",
-        "desc": "pickle.loads() 反序列化不可信数据可执行任意代码",
-        "fix": "用 json 或 msgpack 替代 pickle",
+        "desc": "pickle.loads() deserializing untrusted data can execute arbitrary code",
+        "fix": "Use json or msgpack instead of pickle",
     },
     "subprocess.call": {
         "cwe": "CWE-78",
         "severity": Severity.MEDIUM,
         "title": "Shell Injection Risk",
-        "desc": "subprocess.call() 配合 shell=True 可被注入",
-        "fix": "用 subprocess.run(args, shell=False) 并传入列表",
+        "desc": "subprocess.call() with shell=True may be injected",
+        "fix": "Use subprocess.run(args, shell=False) with a list",
     },
     "os.system": {
         "cwe": "CWE-78",
         "severity": Severity.HIGH,
         "title": "OS Command Injection via os.system()",
-        "desc": "os.system() 直接执行 shell 命令",
-        "fix": "用 subprocess.run() 替代",
+        "desc": "os.system() directly executes shell commands",
+        "fix": "Use subprocess.run() instead",
     },
     "yaml.load": {
         "cwe": "CWE-502",
         "severity": Severity.HIGH,
         "title": "Deserialization via yaml.load()",
-        "desc": "yaml.load() 不带 SafeLoader 可执行任意代码",
-        "fix": "用 yaml.safe_load() 替代",
+        "desc": "yaml.load() without SafeLoader can execute arbitrary code",
+        "fix": "Use yaml.safe_load() instead",
     },
     "xml.etree.ElementTree.parse": {
         "cwe": "CWE-611",
         "severity": Severity.HIGH,
         "title": "XXE via xml.etree.ElementTree",
-        "desc": "解析不受信 XML 可能导致 XXE 攻击",
-        "fix": "用 defusedxml 替代，或禁用外部实体",
+        "desc": "Parsing untrusted XML may lead to XXE attacks",
+        "fix": "Use defusedxml, or disable external entity processing",
     },
     "tempfile.mktemp": {
         "cwe": "CWE-377",
         "severity": Severity.MEDIUM,
         "title": "Insecure Temporary File",
-        "desc": "mktemp() 存在竞态条件，不安全",
-        "fix": "用 tempfile.mkstemp() 或 TemporaryFile() 替代",
+        "desc": "mktemp() has a race condition and is insecure",
+        "fix": "Use tempfile.mkstemp() or TemporaryFile() instead",
     },
     "hashlib.md5": {
         "cwe": "CWE-328",
         "severity": Severity.MEDIUM,
         "title": "Weak Hash: MD5",
-        "desc": "MD5 已被证明不安全，存在碰撞攻击",
-        "fix": "用 hashlib.sha256() 或更高强度的哈希算法",
+        "desc": "MD5 is proven insecure, vulnerable to collision attacks",
+        "fix": "Use hashlib.sha256() or stronger hash algorithm",
     },
     "hashlib.sha1": {
         "cwe": "CWE-328",
         "severity": Severity.LOW,
         "title": "Weak Hash: SHA-1",
-        "desc": "SHA-1 已被证明不安全，存在碰撞攻击",
-        "fix": "用 hashlib.sha256() 或更高强度的哈希算法",
+        "desc": "SHA-1 is proven insecure, vulnerable to collision attacks",
+        "fix": "Use hashlib.sha256() or stronger hash algorithm",
     },
 }
 
@@ -189,49 +189,49 @@ PYTHON_VULNERABLE_PATTERNS = [
         "cwe": "CWE-73",
         "severity": Severity.LOW,
         "title": "File Write Without Validation",
-        "desc": "写文件前应验证路径，防止路径遍历",
-        "fix": "用 os.path.realpath() 验证路径在预期目录内",
+        "desc": "File path should be validated before writing to prevent path traversal",
+        "fix": "Use os.path.realpath() to verify path is within expected directory",
     },
     {
         "pattern": r"assert\s+",
         "cwe": "CWE-617",
         "severity": Severity.LOW,
         "title": "Assert in Production Code",
-        "desc": "assert 在 -O 模式下被跳过，不应用于安全检查",
-        "fix": "用 if + raise 替代 assert",
+        "desc": "assert is skipped in -O mode, should not be used for security checks",
+        "fix": "Use if + raise instead of assert",
     },
 ]
 
-# ─── 新增 C 模式匹配（参考 vigolium/pentest-ai） ─────────────────
+# ─── New C Patterns (inspired by vigolium/pentest-ai) ────────────
 
 C_NEW_PATTERNS = [
     {
         "pattern": r"(?:access|fopen|open)\s*\([^)]*argv",
         "cwe": "CWE-22",
         "severity": Severity.HIGH,
-        "title": "Path Traversal via user input",
-        "desc": "文件操作使用了命令行参数，可能存在路径遍历",
-        "fix": "验证路径在预期目录内，用 realpath() 规范化",
+        "title": "Path Traversal via User Input",
+        "desc": "File operations use command-line arguments, potential path traversal",
+        "fix": "Validate path is within expected directory, use realpath() normalization",
     },
     {
         "pattern": r"(?:MD5|DES|RC4)\s*\(",
         "cwe": "CWE-327",
         "severity": Severity.MEDIUM,
         "title": "Use of Weak Cryptographic Algorithm",
-        "desc": "使用了已知不安全的加密算法",
-        "fix": "用 AES-256/SHA-256 等现代算法替代",
+        "desc": "Uses a known insecure cryptographic algorithm",
+        "fix": "Replace with AES-256/SHA-256 or other modern algorithms",
     },
     {
         "pattern": r"atoi\s*\(|atol\s*\(|atof\s*\(",
         "cwe": "CWE-190",
         "severity": Severity.LOW,
         "title": "Integer Overflow via atoi/atol",
-        "desc": "atoi/atol 不检查溢出，大数值可能溢出",
-        "fix": "用 strtol/strtoul 并检查 errno",
+        "desc": "atoi/atol does not check for overflow, large values may wrap around",
+        "fix": "Use strtol/strtoul and check errno",
     },
 ]
 
-# ─── Python 新增模式匹配 ───────────────────────────────────────
+# ─── New Python Patterns ────────────────────────────────────────
 
 PYTHON_NEW_PATTERNS = [
     {
@@ -239,29 +239,29 @@ PYTHON_NEW_PATTERNS = [
         "cwe": "CWE-798",
         "severity": Severity.HIGH,
         "title": "Hard-coded Credentials",
-        "desc": "代码中硬编码了密码，不应出现在源码中",
-        "fix": "用环境变量或配置文件存储凭证",
+        "desc": "Password is hard-coded in source, should not appear in code",
+        "fix": "Use environment variables or config files to store credentials",
     },
     {
         "pattern": r"(?:secret|token|api_key)\s*=\s*['\"][a-zA-Z0-9+/=]{8,}['\"]",
         "cwe": "CWE-798",
         "severity": Severity.HIGH,
         "title": "Hard-coded Secret/Token",
-        "desc": "代码中硬编码了密钥或令牌",
-        "fix": "用环境变量或密钥管理服务",
+        "desc": "Secret or token is hard-coded in source",
+        "fix": "Use environment variables or a secrets manager",
     },
 ]
 
 
 class StaticAnalyzer:
-    """Tree-sitter 静态分析器 Agent"""
+    """Tree-sitter Static Analyzer Agent."""
 
     def __init__(self):
         self._risk_counter = 0
         self._counter_lock = threading.Lock()
 
     def analyze(self, code_file: CodeFile) -> list[Risk]:
-        """分析单个文件，返回风险列表"""
+        """Analyze a single file and return risk list."""
         risks: list[Risk] = []
 
         if code_file.language == Language.C:
@@ -272,7 +272,7 @@ class StaticAnalyzer:
         return risks
 
     def analyze_batch(self, files: list[CodeFile]) -> list[Risk]:
-        """批量分析多个文件"""
+        """Analyze multiple files in batch."""
         all_risks: list[Risk] = []
         for f in files:
             risks = self.analyze(f)
@@ -283,14 +283,15 @@ class StaticAnalyzer:
                 console.print(f"  [green]✓ {f.path}: clean[/]")
         return all_risks
 
-    # ─── C 分析 ──────────────────────────────────────────────────
+    # ─── C Analysis ─────────────────────────────────────────────
 
     def _analyze_c(self, code_file: CodeFile) -> list[Risk]:
+        """Analyze C code for dangerous patterns."""
         risks: list[Risk] = []
         lines = code_file.content.split("\n")
 
         for i, line in enumerate(lines, start=1):
-            # 检查危险函数调用
+            # Check dangerous function calls
             for func, info in C_DANGEROUS_FUNCTIONS.items():
                 if re.search(rf"\b{func}\s*\(", line):
                     risks.append(self._make_risk(
@@ -305,11 +306,11 @@ class StaticAnalyzer:
                         line_end=i,
                         snippet=line.strip(),
                         source="pattern_match",
-                        reasoning=f"检测到危险函数 {func}() 调用",
+                        reasoning=f"Dangerous function {func}() call detected",
                         suggestion=info["fix"],
                     ))
 
-            # 检查模式匹配
+            # Check vulnerability patterns
             for pat in C_VULNERABLE_PATTERNS:
                 if re.search(pat["pattern"], line):
                     # malloc: check 3 lines after for NULL check
@@ -328,7 +329,7 @@ class StaticAnalyzer:
                                 line_end=i,
                                 snippet=line.strip(),
                                 source="pattern_match",
-                                reasoning=f"匹配模式: {pat['pattern']}",
+                                reasoning=f"Pattern matched: {pat['pattern']}",
                                 suggestion=pat["fix"],
                             ))
                     # double free: only flag if same variable freed 2+ times
@@ -337,12 +338,11 @@ class StaticAnalyzer:
                         m = _re.search(r"free\s*\((\w+)\)", line)
                         if m:
                             var = m.group(1)
-                            # count how many times this var is freed
                             free_count = sum(1 for ln in lines if _re.search(rf"free\s*\({var}\)", ln))
                             if free_count >= 2:
                                 risks.append(self._make_risk(
                                     title=pat["title"],
-                                    description=f"{pat['desc']} (变量 {var} 被释放 {free_count} 次)",
+                                    description=f"{pat['desc']} (variable '{var}' freed {free_count} times)",
                                     severity=pat["severity"],
                                     confidence=Confidence.HIGH,
                                     cwe_id=pat["cwe"],
@@ -352,11 +352,11 @@ class StaticAnalyzer:
                                     line_end=i,
                                     snippet=line.strip(),
                                     source="pattern_match",
-                                    reasoning=f"变量 {var} 存在 {free_count} 次 free() 调用",
+                                    reasoning=f"Variable '{var}' has {free_count} free() calls",
                                     suggestion=pat["fix"],
                                 ))
 
-            # 检查新增模式（参考 vigolium/pentest-ai）
+            # Check new patterns (inspired by vigolium/pentest-ai)
             for pat in C_NEW_PATTERNS:
                 if re.search(pat["pattern"], line):
                     risks.append(self._make_risk(
@@ -371,25 +371,26 @@ class StaticAnalyzer:
                         line_end=i,
                         snippet=line.strip(),
                         source="pattern_match",
-                        reasoning=f"匹配模式: {pat['pattern']}",
+                        reasoning=f"Pattern matched: {pat['pattern']}",
                         suggestion=pat["fix"],
                     ))
 
         return risks
 
-    # ─── Python 分析 ────────────────────────────────────────────
+    # ─── Python Analysis ────────────────────────────────────────
 
     def _analyze_python(self, code_file: CodeFile) -> list[Risk]:
+        """Analyze Python code for dangerous patterns."""
         risks: list[Risk] = []
         lines = code_file.content.split("\n")
 
         for i, line in enumerate(lines, start=1):
-            # 跳过注释
+            # Skip comments
             stripped = line.strip()
             if stripped.startswith("#"):
                 continue
 
-            # 检查危险函数调用
+            # Check dangerous function calls
             for func, info in PYTHON_DANGEROUS_CALLS.items():
                 if re.search(rf"\b{func}\s*\(", line):
                     risks.append(self._make_risk(
@@ -404,11 +405,11 @@ class StaticAnalyzer:
                         line_end=i,
                         snippet=line.strip(),
                         source="pattern_match",
-                        reasoning=f"检测到危险函数 {func}() 调用",
+                        reasoning=f"Dangerous function {func}() call detected",
                         suggestion=info["fix"],
                     ))
 
-            # 检查模式匹配
+            # Check vulnerability patterns
             for pat in PYTHON_VULNERABLE_PATTERNS:
                 if re.search(pat["pattern"], line):
                     risks.append(self._make_risk(
@@ -423,11 +424,11 @@ class StaticAnalyzer:
                         line_end=i,
                         snippet=line.strip(),
                         source="pattern_match",
-                        reasoning=f"匹配模式: {pat['pattern']}",
+                        reasoning=f"Pattern matched: {pat['pattern']}",
                         suggestion=pat["fix"],
                     ))
 
-            # 检查新增模式
+            # Check new patterns
             for pat in PYTHON_NEW_PATTERNS:
                 if re.search(pat["pattern"], line):
                     risks.append(self._make_risk(
@@ -442,15 +443,16 @@ class StaticAnalyzer:
                         line_end=i,
                         snippet=line.strip(),
                         source="pattern_match",
-                        reasoning=f"匹配模式: {pat['pattern']}",
+                        reasoning=f"Pattern matched: {pat['pattern']}",
                         suggestion=pat["fix"],
                     ))
 
         return risks
 
-    # ─── 工具方法 ────────────────────────────────────────────────
+    # ─── Utility Methods ────────────────────────────────────────
 
     def _make_risk(self, **kwargs) -> Risk:
+        """Create a Risk with auto-generated ID."""
         with self._counter_lock:
             self._risk_counter += 1
             risk_id = f"RISK-{self._risk_counter:03d}"
