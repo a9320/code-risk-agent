@@ -171,7 +171,7 @@ def cmd_info() -> None:
 
     table.add_row("Version", VERSION)
     table.add_row("Default Model", "Qwen2.5-Coder-32B-Instruct")
-    table.add_row("Backends", "Shared API + llama-server + llama-cpp-python")
+    table.add_row("Backends", "llama-server + llama-cpp-python (local only)")
     table.add_row("Analyzers", "Static (regex) + Semgrep + LLM semantic + Deep verifier")
     table.add_row("Languages", "C (.c/.h) + Python (.py)")
     table.add_row("CWE Rules", "CWE-120/134/476/415/78/95/502/73/617")
