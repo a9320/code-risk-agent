@@ -46,6 +46,9 @@ class CVEClient:
                     f"[yellow]CVE database not found at {self.db_path}. "
                     f"Run: python scripts/download_cve_data.py[/]"
                 )
+                console.print(
+                    f"[dim]  CVE lookup will return empty results until database is built.[/]"
+                )
                 # Return empty in-memory database as fallback
                 self._conn = sqlite3.connect(":memory:")
                 self._conn.execute(
