@@ -1,6 +1,6 @@
-"""CodeRisk Agent — 核心数据模型
+"""CodeRisk Agent — Core Data Models
 
-所有 Agent 之间的数据流转都通过这些模型。
+All data flow between agents uses these models.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, computed_field
 
 
-# ─── 语言 & 风险等级 ───────────────────────────────────────────────
+# ─── Language & Severity ─────────────────────────────────────────
 
 class Language(str, Enum):
     C = "c"
@@ -23,7 +23,7 @@ class Language(str, Enum):
 
 
 class Severity(str, Enum):
-    """风险等级，从低到高"""
+    """Risk severity, from low to high."""
     INFO = "info"
     LOW = "low"
     MEDIUM = "medium"
@@ -32,16 +32,16 @@ class Severity(str, Enum):
 
 
 class Confidence(str, Enum):
-    """置信度"""
+    """Detection confidence level."""
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
 
 
-# ─── 输入模型 ─────────────────────────────────────────────────────
+# ─── Input Models ────────────────────────────────────────────────
 
 class CodeFile(BaseModel):
-    """待分析的源代码文件"""
+    """Source code file to be analyzed."""
     path: Path
     content: str
     language: Language = Language.UNKNOWN
@@ -64,39 +64,39 @@ class CodeFile(BaseModel):
 
 
 class AnalysisRequest(BaseModel):
-    """分析请求"""
+    """Analysis request."""
     files: list[CodeFile]
     rules: list[str] = Field(default_factory=lambda: ["p/default"])
-    depth: int = Field(default=2, ge=1, le=5, description="分析深度，1=浅 5=深")
+    depth: int = Field(default=2, ge=1, le=5, description="Analysis depth, 1=shallow 5=deep")
     enable_ai: bool = True
 
 
-# ─── 风险 & 证据 ─────────────────────────────────────────────────
+# ─── Risk & Evidence ─────────────────────────────────────────────
 
 class Evidence(BaseModel):
-    """单条证据 — 风险的来源和推理链"""
-    source: str = Field(description="来源: semgrep/tree-sitter/ai/manual")
+    """Single evidence — source and reasoning chain of a risk."""
+    source: str = Field(description="Source: semgrep/tree-sitter/ai/manual")
     rule_id: Optional[str] = None
-    snippet: str = Field(description="相关代码片段")
+    snippet: str = Field(description="Relevant code snippet")
     line_start: int
     line_end: int
-    reasoning: str = Field(description="推理过程")
+    reasoning: str = Field(description="Reasoning process")
 
 
 class Risk(BaseModel):
-    """一个风险项"""
-    id: str = Field(description="唯一 ID，如 RISK-001")
+    """A risk item."""
+    id: str = Field(description="Unique ID, e.g. RISK-001")
     title: str
     description: str
     severity: Severity
     confidence: Confidence
-    cwe_id: Optional[str] = Field(default=None, description="CWE 编号，如 CWE-120")
+    cwe_id: Optional[str] = Field(default=None, description="CWE ID, e.g. CWE-120")
     language: Language
     file_path: Path
     line_start: int
     line_end: int
     evidence: list[Evidence] = Field(default_factory=list)
-    suggestion: str = Field(description="修复建议")
+    suggestion: str = Field(description="Fix suggestion")
 
     @computed_field
     @property
@@ -104,7 +104,7 @@ class Risk(BaseModel):
         return len(self.evidence)
 
 
-# ─── Agent 消息 ───────────────────────────────────────────────────
+# ─── Agent Messages ──────────────────────────────────────────────
 
 class AgentRole(str, Enum):
     STATIC = "static_analyzer"
@@ -115,18 +115,18 @@ class AgentRole(str, Enum):
 
 
 class AgentMessage(BaseModel):
-    """Agent 间通信消息"""
+    """Inter-agent communication message."""
     sender: AgentRole
     receiver: AgentRole
     content: dict
     timestamp: datetime = Field(default_factory=datetime.now)
-    correlation_id: str = Field(description="关联 ID，追踪同一轮分析")
+    correlation_id: str = Field(description="Correlation ID, tracking the same analysis round")
 
 
-# ─── 分析结果 ─────────────────────────────────────────────────────
+# ─── Analysis Result ─────────────────────────────────────────────
 
 class AnalysisResult(BaseModel):
-    """完整分析结果"""
+    """Complete analysis result."""
     request_id: str
     files_analyzed: int
     risks: list[Risk] = Field(default_factory=list)
@@ -154,31 +154,30 @@ class AnalysisResult(BaseModel):
         return any(r.severity == Severity.CRITICAL for r in self.risks)
 
 
-# ─── LLM 配置 ────────────────────────────────────────────────────
+# ─── LLM Configuration ──────────────────────────────────────────
 
 class LLMBackend(str, Enum):
-    SHARED_API = "shared_api"
-    LOCAL_HTTP = "local_http"      # llama-server HTTP API
-    LOCAL_LLAMA_CPP = "local_llama_cpp"  # llama-cpp-python 直接加载
+    LOCAL_HTTP = "local_http"          # llama-server HTTP API
+    LOCAL_LLAMA_CPP = "local_llama_cpp"  # llama-cpp-python direct load
 
 
 class LLMConfig(BaseModel):
-    """LLM 客户端配置"""
+    """LLM client configuration."""
     backend: LLMBackend = LLMBackend.LOCAL_LLAMA_CPP
     api_url: str = ""
     api_key: str = ""
     model: str = ""
-    model_path: str = Field(default="", description="本地 GGUF 模型路径")
-    n_gpu_layers: int = Field(default=999, description="GPU 层数，999=全部 offload")
+    model_path: str = Field(default="", description="Local GGUF model path")
+    n_gpu_layers: int = Field(default=999, description="GPU layers, 999=all offload")
     temperature: float = Field(default=0.1, ge=0.0, le=2.0)
     max_tokens: int = Field(default=4096, ge=256, le=32768)
     timeout: int = Field(default=180, ge=5, le=600)
 
 
-# ─── 工具函数 ─────────────────────────────────────────────────────
+# ─── Utility Functions ───────────────────────────────────────────
 
 def _detect_language(path: Path) -> Language:
-    """根据文件扩展名检测语言"""
+    """Detect language based on file extension."""
     suffix_map = {
         ".c": Language.C,
         ".h": Language.C,
@@ -187,11 +186,11 @@ def _detect_language(path: Path) -> Language:
     return suffix_map.get(path.suffix, Language.UNKNOWN)
 
 
-# ─── LLM 结构化输出 Schema ──────────────────────────────────────
+# ─── LLM Structured Output Schemas ──────────────────────────────
 
 class ValidatedRisk(BaseModel):
-    """LLM 对已有风险的验证结果"""
-    id: str = Field(description="风险 ID，如 RISK-001")
+    """LLM validation result for existing risks."""
+    id: str = Field(description="Risk ID, e.g. RISK-001")
     is_true_positive: bool = Field(default=True)
     reasoning: str = Field(default="")
     attack_scenario: str = Field(default="")
@@ -202,7 +201,7 @@ class ValidatedRisk(BaseModel):
 
 
 class NewRisk(BaseModel):
-    """LLM 发现的新风险"""
+    """New risk discovered by LLM."""
     title: str
     description: str = Field(default="")
     severity: str = Field(default="medium")
@@ -214,13 +213,13 @@ class NewRisk(BaseModel):
 
 
 class SemanticResponse(BaseModel):
-    """SemanticAnalyzer LLM 输出的 Schema"""
+    """SemanticAnalyzer LLM output schema."""
     validated_risks: list[ValidatedRisk] = Field(default_factory=list)
     new_risks: list[NewRisk] = Field(default_factory=list)
 
 
 class VerifiedRisk(BaseModel):
-    """DeepVerifier 对风险的验证结果"""
+    """DeepVerifier risk validation result."""
     id: str
     confirmed: bool = Field(default=True)
     confidence_reason: str = Field(default="")
@@ -228,7 +227,7 @@ class VerifiedRisk(BaseModel):
 
 
 class MissedRisk(BaseModel):
-    """DeepVerifier 发现的遗漏风险"""
+    """Missed risk discovered by DeepVerifier."""
     title: str
     description: str = Field(default="")
     severity: str = Field(default="medium")
@@ -240,6 +239,6 @@ class MissedRisk(BaseModel):
 
 
 class ReflectionResponse(BaseModel):
-    """DeepVerifier 自省循环的 LLM 输出 Schema"""
+    """DeepVerifier self-reflection loop LLM output schema."""
     verified_risks: list[VerifiedRisk] = Field(default_factory=list)
     missed_risks: list[MissedRisk] = Field(default_factory=list)
