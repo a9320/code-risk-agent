@@ -1,151 +1,134 @@
-"""CodeRisk Agent - CVE/NVD Client
+"""CodeRisk Agent - Local CVE Database Client
 
-Queries NVD (National Vulnerability Database) for CVE information.
-Used by DeepVerifier for knowledge-base cross-validation.
+Queries a local SQLite database built from NVD JSON feeds.
+No external API calls — 100% offline operation.
+
+Usage:
+    # Build database first (one-time setup):
+    python scripts/download_cve_data.py
+
+    # Then query locally:
+    client = CVEClient()
+    results = client.query_by_cwe("CWE-120")
 """
-
 from __future__ import annotations
 
 import json
-import os
-import time
+import re
+import sqlite3
 from pathlib import Path
 from typing import Optional
 
-import httpx
 from rich.console import Console
 
 console = Console()
 
-NVD_API_BASE = "https://services.nvd.nist.gov/rest/json/cves/2.0"
-REQUEST_TIMEOUT = 15
-RATE_LIMIT_DELAY = 1.0  # NVD rate limit: 5 requests/30s without API key
-CACHE_DIR = Path(os.getenv("CODERISK_CACHE_DIR", str(Path.home() / ".coderisk" / "cache")))
-CACHE_FILE = CACHE_DIR / "cve_cache.json"
-CACHE_TTL_SECONDS = 86400  # 24 hours
+# Default database path
+DEFAULT_DB_PATH = Path(__file__).parent.parent / "data" / "vuln_db.sqlite"
 
 
 class CVEClient:
-    """Query NVD for CVE information by CWE ID or keyword.
+    """Query local NVD SQLite database for CVE information by CWE ID.
 
-    Features:
-    - In-memory cache for fast access
-    - Persistent disk cache (survives restarts)
-    - TTL-based expiry (24h default)
+    All data is pre-downloaded — no network calls at runtime.
     """
 
-    def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key
-        self._client = httpx.Client(timeout=REQUEST_TIMEOUT)
-        self._cache: dict[str, dict] = {}  # key -> {data, timestamp}
-        self._last_request_time = 0.0
-        self._dirty = False
-        self._load_disk_cache()
+    def __init__(self, db_path: Optional[Path] = None):
+        self.db_path = db_path or DEFAULT_DB_PATH
+        self._cache: dict[str, list[dict]] = {}
+        self._conn: Optional[sqlite3.Connection] = None
+
+    def _get_connection(self) -> sqlite3.Connection:
+        """Get or create SQLite connection."""
+        if self._conn is None:
+            if not self.db_path.exists():
+                console.print(
+                    f"[yellow]CVE database not found at {self.db_path}. "
+                    f"Run: python scripts/download_cve_data.py[/]"
+                )
+                # Return empty in-memory database as fallback
+                self._conn = sqlite3.connect(":memory:")
+                self._conn.execute(
+                    "CREATE TABLE cves (cve_id TEXT, cwe_id TEXT, description TEXT, "
+                    "severity TEXT, cvss_score REAL, references_json TEXT)"
+                )
+            else:
+                self._conn = sqlite3.connect(str(self.db_path))
+                self._conn.row_factory = sqlite3.Row
+        return self._conn
 
     def query_by_cwe(
         self,
         cwe_id: str,
         max_results: int = 5,
     ) -> list[dict]:
-        """Query CVEs associated with a CWE ID.
+        """Query CVEs associated with a CWE ID from local database.
 
         Args:
-            cwe_id: CWE identifier, e.g. "CWE-120"
-            max_results: Maximum number of CVEs to return
+            cwe_id: CWE identifier (e.g. "CWE-120" or "CWE-120: Buffer Overflow")
+            max_results: Maximum number of results to return
 
         Returns:
-            List of CVE summaries with id, description, severity, references
+            List of CVE records sorted by CVSS score (descending)
         """
-        # Check cache (memory + disk)
         cache_key = f"{cwe_id}:{max_results}"
-        cached = self._get_cached(cache_key)
-        if cached is not None:
-            return cached
+        if cache_key in self._cache:
+            return self._cache[cache_key]
 
-        # Sanitize CWE ID: extract just "CWE-xxx" from strings like "CWE-676: Use of..."
-        import re
-        cwe_match = re.match(r'(CWE-\d+)', cwe_id)
+        # Sanitize CWE ID — extract just "CWE-xxx"
+        cwe_match = re.match(r"(CWE-\d+)", cwe_id)
         if cwe_match:
             cwe_id = cwe_match.group(1)
         else:
-            console.print(f"[dim]Invalid CWE ID format: {cwe_id}[/]")
             return []
 
-        # Rate limiting
-        self._rate_limit()
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT cve_id, description, severity, cvss_score, references_json
+            FROM cves
+            WHERE cwe_id = ?
+            ORDER BY cvss_score DESC
+            LIMIT ?
+            """,
+            (cwe_id, max_results),
+        )
 
-        params = {
-            "cweId": cwe_id,
-            "resultsPerPage": max_results,
-        }
-        if self.api_key:
-            params["apiKey"] = self.api_key
-
-        try:
-            resp = self._client.get(NVD_API_BASE, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-        except Exception as e:
-            console.print(f"[dim]CVE query failed for {cwe_id}: {e}[/]")
-            return []
-
-        vulnerabilities = data.get("vulnerabilities", [])
         results = []
+        for row in cursor.fetchall():
+            if isinstance(row, sqlite3.Row):
+                cve_id = row["cve_id"]
+                desc = row["description"]
+                severity = row["severity"]
+                cvss = row["cvss_score"]
+                refs_json = row["references_json"]
+            else:
+                cve_id, desc, severity, cvss, refs_json = row
 
-        for vuln in vulnerabilities:
-            cve = vuln.get("cve", {})
-            cve_id = cve.get("id", "unknown")
+            results.append(
+                {
+                    "cve_id": cve_id,
+                    "description": desc or "",
+                    "severity": severity or "unknown",
+                    "cvss_score": cvss or 0.0,
+                    "references": json.loads(refs_json) if refs_json else [],
+                }
+            )
 
-            # Extract description
-            descriptions = cve.get("descriptions", [])
-            desc_en = ""
-            for d in descriptions:
-                if d.get("lang") == "en":
-                    desc_en = d.get("value", "")
-                    break
-
-            # Extract severity from CVSS
-            metrics = cve.get("metrics", {})
-            severity = "unknown"
-            cvss_score = 0.0
-
-            # Try CVSS v3.1 first, then v3.0, then v2.0
-            for version_key in ["cvssMetricV31", "cvssMetricV30", "cvssMetricV2"]:
-                version_metrics = metrics.get(version_key, [])
-                if version_metrics:
-                    cvss_data = version_metrics[0].get("cvssData", {})
-                    cvss_score = cvss_data.get("baseScore", 0.0)
-                    severity = cvss_data.get("baseSeverity", "unknown").lower()
-                    break
-
-            # Extract references
-            references = []
-            for ref in cve.get("references", [])[:3]:
-                references.append(ref.get("url", ""))
-
-            results.append({
-                "cve_id": cve_id,
-                "description": desc_en[:300],
-                "severity": severity,
-                "cvss_score": cvss_score,
-                "references": references,
-            })
-
-        # Cache results (memory + mark for disk flush)
-        self._set_cache(cache_key, results)
+        self._cache[cache_key] = results
         return results
 
     def has_known_exploits(self, cwe_id: str) -> bool:
-        """Check if a CWE has known exploitable CVEs (quick check)."""
+        """Check if a CWE has known high-severity CVEs (CVSS >= 7.0)."""
         results = self.query_by_cwe(cwe_id, max_results=3)
-        # If any CVE has high/critical severity, consider it exploitable
         return any(
             r["severity"] in ("high", "critical") and r["cvss_score"] >= 7.0
             for r in results
         )
 
     def get_cve_summary(self, cwe_id: str) -> str:
-        """Get a brief summary of CVEs for a CWE (for report inclusion)."""
+        """Get a brief summary of CVEs for a CWE."""
         results = self.query_by_cwe(cwe_id, max_results=3)
         if not results:
             return f"No CVE data found for {cwe_id}"
@@ -158,63 +141,21 @@ class CVEClient:
             )
         return " | ".join(summaries)
 
-    def _get_cached(self, key: str) -> Optional[list[dict]]:
-        """Get from cache if not expired."""
-        entry = self._cache.get(key)
-        if entry is None:
-            return None
-        if time.time() - entry["timestamp"] > CACHE_TTL_SECONDS:
-            del self._cache[key]
-            self._dirty = True
-            return None
-        return entry["data"]
-
-    def _set_cache(self, key: str, data: list[dict]):
-        """Set cache entry and flush to disk."""
-        self._cache[key] = {"data": data, "timestamp": time.time()}
-        self._dirty = True
-        self._flush_disk_cache()
-
-    def _load_disk_cache(self):
-        """Load cache from disk."""
-        try:
-            if CACHE_FILE.exists():
-                raw = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
-                # Filter expired entries
-                now = time.time()
-                self._cache = {
-                    k: v for k, v in raw.items()
-                    if now - v.get("timestamp", 0) < CACHE_TTL_SECONDS
-                }
-                console.print(f"[dim]CVE cache loaded: {len(self._cache)} entries[/]")
-        except Exception as e:
-            console.print(f"[dim]CVE cache load failed (will rebuild): {e}[/]")
-            self._cache = {}
-
-    def _flush_disk_cache(self):
-        """Persist cache to disk."""
-        if not self._dirty:
-            return
-        try:
-            CACHE_DIR.mkdir(parents=True, exist_ok=True)
-            CACHE_FILE.write_text(
-                json.dumps(self._cache, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            self._dirty = False
-        except Exception as e:
-            console.print(f"[dim]CVE cache flush failed: {e}[/]")
-
-    def _rate_limit(self):
-        """Respect NVD rate limits."""
-        elapsed = time.monotonic() - self._last_request_time
-        if elapsed < RATE_LIMIT_DELAY:
-            time.sleep(RATE_LIMIT_DELAY - elapsed)
-        self._last_request_time = time.monotonic()
+    def get_stats(self) -> dict:
+        """Get database statistics."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM cves")
+        total = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(DISTINCT cwe_id) FROM cves")
+        cwe_count = cursor.fetchone()[0]
+        return {"total_cves": total, "cwe_categories": cwe_count}
 
     def close(self):
-        self._flush_disk_cache()
-        self._client.close()
+        """Close database connection."""
+        if self._conn:
+            self._conn.close()
+            self._conn = None
 
     def __enter__(self):
         return self
