@@ -8,7 +8,7 @@
 
 | Item | Status | Notes |
 |------|--------|-------|
-| GPU | RX 7900 XTX (gfx1100) | Radeon Cloud container |
+| GPU | Radeon Pro W7900 (48GB VRAM) | Radeon Cloud container |
 | ROCm | 7.2.4 | Fully configured |
 | rocm-smi | Available | Can monitor GPU status |
 | HIP Backend | ✅ Available | GGML_HIP=ON flag |
@@ -21,9 +21,9 @@ Initial attempts with `GGML_HIPBLAS=ON` (the 2024-2025 flag) failed.
 The correct flag for 2026 is `GGML_HIP=ON`. After using the correct flag,
 HIP compiled successfully and GPU inference is fully operational:
 
-- Token generation: 105 t/s (measured on Radeon Cloud, RX 7900 XTX)
+- Token generation: 105 t/s (measured on Radeon Cloud, Radeon Pro W7900)
 - Prompt processing: 628 t/s
-- VRAM usage: 24% (~5 GB)
+- VRAM usage: 41% (~19.6 GB / 48 GB)
 
 ---
 
@@ -33,7 +33,7 @@ HIP compiled successfully and GPU inference is fully operational:
 
 | Optimization | Implementation | Expected Speedup |
 |--------------|---------------|------------------|
-| Q4_K_M Quantization | GGUF format, 4-bit | ~5GB VRAM, 110-114 t/s |
+| Q4_K_M Quantization | GGUF format, 4-bit | ~19.6GB VRAM, 105-114 t/s |
 | Flash Attention | llama.cpp `-fa 1` | 30-50% latency reduction |
 | KV Cache | llama.cpp `-c 4096` | Stable long-context inference |
 
@@ -50,14 +50,14 @@ HIP compiled successfully and GPU inference is fully operational:
 
 | Optimization | Command | Effect |
 |--------------|---------|--------|
-| HIP Backend | `GGML_HIPBLAS=ON` make | 5-7x vs CPU |
+| HIP Backend | `GGML_HIP=ON` make | 15.4x vs CPU |
 | vLLM Batching | Continuous batching | 3-5x throughput |
 | Prefix Caching | KV cache reuse | Reduce repeated computation |
 | MIOpen | Auto-tuned kernels | Optimized for RDNA3 |
 
 ---
 
-## Performance Data (To Be Collected)
+## Performance Data
 
 ### Actual Benchmark Results (Measured on Radeon Cloud)
 
@@ -65,11 +65,11 @@ HIP compiled successfully and GPU inference is fully operational:
 |--------|-----|-----------|-------------|
 | Token generation | 6.8 t/s | 105 t/s | **15.4×** |
 | Prompt processing | — | 628 t/s | — |
-| VRAM usage | — | 24% (~5 GB) | — |
+| VRAM usage | — | 41% (~19.6 GB / 48 GB) | — |
 | GPU temperature | — | 26°C | — |
 
 > All performance data was measured on our Radeon Cloud instance
-> (RX 7900 XTX, ROCm 7.2.4, HIP backend).
+> (Radeon Pro W7900, 48GB VRAM, ROCm 7.2.4, HIP backend).
 
 ---
 
