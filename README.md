@@ -148,8 +148,8 @@ Options:
 ═══════════════════════════════════════════════════════════
 
   Files analyzed: 5
-  Total risks:    25
-  Analysis time:  18 min (GPU inference)
+  Total risks:    47
+  Analysis time:  2 min (GPU inference)
 
   ┌─────────┬──────────┬──────────────────────────────┐
   │ Severity│ CWE      │ Title                        │
@@ -229,9 +229,21 @@ code-risk-agent/
 │   ├── attack_knowledge.py    # CWE/ATT&CK knowledge base
 │   └── retry.py               # Unified retry policy
 ├── tests/
-│   └── test_static_analyzer.py
+│   ├── test_static_analyzer.py
+│   ├── test_cve_client.py
+│   ├── test_llm_client.py
+│   ├── test_memory.py
+│   ├── test_schemas.py
+│   └── test_cases/
+│       ├── buffer_overflow.c
+│       ├── command_injection.c
+│       ├── memory_issues.c
+│       ├── code_injection.py
+│       └── sql_injection.py
 ├── docs/
 │   ├── project-specification.md
+│   ├── architecture-review.md
+│   ├── module-analysis.md
 │   ├── rocm-optimization.md
 │   ├── demo-video-script.md
 │   └── submission-checklist.md
