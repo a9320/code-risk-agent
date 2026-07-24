@@ -320,6 +320,22 @@ MIT
 
 ---
 
+## Runtime Network Policy
+
+CodeRisk Agent performs **zero external network requests** at runtime. All inference, data lookups, and analysis happen locally.
+
+URLs that appear in analysis reports (CWE references, CVE links, MITRE ATT&CK links) are **clickable reference links** for the user's convenience — they open in the user's browser and are never called by the system itself.
+
+| Data Source | How It's Accessed |
+|-------------|------------------|
+| LLM inference | Local GGUF model via llama.cpp (HIP backend) |
+| CVE data | Local SQLite database (`data/vuln_db.sqlite`) |
+| OSV data | Local JSON index (`data/osv/index.json`) |
+| CWE/ATT&CK knowledge | Local Python dictionaries |
+| Report URLs (CWE/CVE/MITRE) | Reference links only — opened by user, not by system |
+
+---
+
 ## Known Limitations
 
 - **Radeon Cloud container:** HIP backend requires `GGML_HIP=ON` (not the older `GGML_HIPBLAS=ON`). On bare-metal systems, both flags may work.

@@ -24,3 +24,7 @@ demo-audio/
 .env
 .env.*
 !.env.example
+
+# Internal documentation (not for submission)
+*.docx
+internal/
