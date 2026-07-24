@@ -37,7 +37,7 @@ console = Console()
 
 MIN_LINES_FOR_LLM = 5
 MAX_STATIC_WORKERS = 4   # CPU-bound parallelism
-MAX_SEMANTIC_WORKERS = 2  # GPU-bound, limited concurrency
+MAX_SEMANTIC_WORKERS = 1  # GPU-bound, limited concurrency (reduced from 2 to avoid VRAM contention)
 
 
 class State(str, Enum):
