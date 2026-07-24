@@ -32,7 +32,7 @@ def download_and_extract(ecosystem: str, url: str) -> list[dict]:
 
     try:
         with urlopen(url, timeout=180) as resp:
-            zip_path.write_bytes(resp.content)
+            zip_path.write_bytes(resp.read())
 
         vulns = []
         with zipfile.ZipFile(zip_path) as zf:
